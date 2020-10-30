@@ -8,85 +8,70 @@ from ..coordinates import coordinates as coords
 
 
 
-def checking_angles(theta,phi):
+def checking_angles(theta, phi):
     theta = utils.listify(theta)
     phi = utils.listify(phi)
-
     if (len(np.shape(theta)) == 1) & (len(np.shape(phi)) == 1) & (len(theta) > 1) & (len(phi) > 1):
         theta, phi = np.meshgrid(theta, phi)
         print('theta and phi are both 1D array : applying meshgrid to do a 3D boundaries')
     return theta, phi
 
 
-def Radius_Formisano1979(theta, phi, args):
-
-    a11,a22,a33,a12,a13,a23,a14,a24,a34,a44 = args[0],args[1],args[2],args[3],args[4],args[5],args[6],args[7],args[8],args[9]
-
+def _formisano1979(theta, phi, **kwargs):
+    a11,a22,a33,a12,a13,a23,a14,a24,a34,a44 = kwargs["coefs"]
     ct = np.cos(theta)
     st = np.sin(theta)
     cp = np.cos(phi)
     sp = np.sin(phi)
-
-    A = a11*ct**2 + st**2*(a22*cp**2 + a33*sp**2) + ct*st*(a12*cp + a13*sp) + a23*st**2*cp*sp
+    A = a11 * ct**2 + st**2 * (a22* cp**2 + a33 * sp**2) \
+        + ct * st * (a12 * cp + a13 * sp) + a23 * st**2 * cp * sp
     B = a14*ct + st*(a24*cp + a34*sp)
     C = a44
-
     D = B**2 - 4*A*C
-
-    R = (-B + np.sqrt(D))/(2*A)
-
-    return R
+    return (-B + np.sqrt(D))/(2*A)
 
 
-def MP_Formisano1979(theta, phi, solar_wind=None, base='cartesian'):
+def formisano1979(theta, phi, **kwargs):
     '''
     Formisano 2005 magnetopause model. Give the default position of the magnetopause.
     function's arguments :
         - theta : angle in radiant, can be int, float or array (1D or 2D)
         - phi   : angle in radiant, can be int, float or array (1D or 2D)
+    kwargs:
+        - boundary  : "magnetopause", "bow_shock"
         - base  : can be "cartesian" (default) or "spherical"
 
-    information : to get a particular point theta and phi must be an int or a float (ex : the nose of the boundary is given with the input theta=0 and phi=0). If a plan (2D) of the boundary is wanted one of the two angle must be an array and the other one must be an int or a float (ex : (XY) plan with Z=0 is given with the input theta=np.linespace(-np.pi/2,np.pi/2,100) and phi=0). To get the 3D boundary theta and phi must be given an array, if it is two 1D array a meshgrid will be performed to obtain a two 2D array.
 
+    information : to get a particular point theta and phi must be an int or a float
+    (ex : the nose of the boundary is given with the input theta=0 and phi=0). If a plan (2D) of
+    the boundary is wanted one of the two angle must be an array and the other one must be
+    an int or a float (ex : (XY) plan with Z=0 is given with the input
+    theta=np.linespace(-np.pi/2,np.pi/2,100) and phi=0). To get the 3D boundary theta and phi
+    must be given an array, if it is two 1D array a meshgrid will be performed to obtain a two 2D array.
 
     return : X,Y,Z (base="cartesian")or R,theta,phi (base="spherical") depending on the chosen base
     '''
 
-    default_mp_formisano = [0.65,1,1.16,0.03,-0.28,-0.11,21.41,0.46,-0.36,-221]
+    if kwargs["boundary"] == "magnetopause":
+        coefs = [0.65,1,1.16,0.03,-0.28,-0.11,21.41,0.46,-0.36,-221]
+    elif kwargs["boundary"] == "bow_shock":
+        coefs = [0.52, 1, 1.05, 0.13, -0.16, -0.08, 47.53, -0.42, 0.67, -613]
+    else:
+        raise ValueError("boundary: {} not allowed".format(kwargs["boundary"]))
 
-    theta,phi = checking_angles(theta,phi)
-
-    R =  Radius_Formisano1979(theta, phi, default_mp_formisano)
-
-    return coords.BaseChoice(base,R,theta,phi)
-
-
-
-def BS_Formisano1979(theta, phi, solar_wind=None,  base='cartesian'):
-    '''
-    Formisano 2005 Bow shock model. Give the default position of the bow shock.
-    function's arguments :
-        - theta : angle in radiant, can be int, float or array (1D or 2D)
-        - phi   : angle in radiant, can be int, float or array (1D or 2D)
-        - base  : can be "cartesian" (default) or "spherical"
-
-    information : to get a particular point theta and phi must be an int or a float (ex : the nose of the boundary is given with the input theta=0 and phi=0). If a plan (2D) of the boundary is wanted one of the two angle must be an array and the other one must be an int or a float (ex : (XY) plan with Z=0 is given with the input theta=np.linespace(-np.pi/2,np.pi/2,100) and phi=0). To get the 3D boundary theta and phi must be given an array, if it is two 1D array a meshgrid will be performed to obtain a two 2D array.
+    theta, phi = checking_angles(theta, phi)
+    r          =  _formisano1979(theta, phi, coefs = coefs)
+    base       = kwargs.get("base", "cartesian")
+    if base == "cartesian":
+        return coords.spherical_to_cartesian(R, theta, phi)
+    elif base == "spherical":
+        return r, theta, phi
+    raise ValueError("unknown base '{}'".format(kwargs["base"]))
 
 
-    return : X,Y,Z (base="cartesian")or R,theta,phi (base="spherical") depending on the chosen base
-    '''
 
 
-    default_bs_formisano = [0.52,1,1.05,0.13,-0.16,-0.08,47.53,-0.42,0.67,-613]
-
-    theta,phi = checking_angles(theta,phi)
-
-    R =  Radius_Formisano1979(theta, phi, default_bs_formisano)
-
-    return coords.BaseChoice(base,R,theta,phi)
-
-
-def Fairfield1971(x,args):
+def Fairfield1971(x, args):
 
     '''
     Fairfield 1971 : Magnetopause and Bow shock models. Give positions of the boudaries in plans (XY) with Z=0 and (XZ) with Y=0.
