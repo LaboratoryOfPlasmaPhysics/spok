@@ -215,29 +215,41 @@ def BS_Jerab2005( Np, V, Ma, B, gamma=2.15 ):
     return pos.sort_values('Y')
 
 
-def MP_Shue1998(Pd, Bz):
-    ''' Shue 1998 Magnetopause model. Returns the MP distance for given
-    theta (r), dynamic pressure (in nPa) and Bz (in nT).
-    * theta: Angle from the x axis (model is cylindrical symmetry)
-    * PD: Dynamic Pressure in nPa
-    * Bz: z component of IMF in nT'''
-    r0 = (10.22+1.29*np.tanh(0.184*(Bz+8.14)))*Pd**(-1./6.6)
+def shue1998(theta, phi, **kwargs):
+    '''
+    Shue 1998 Magnetopause model.
 
+     Returns the MP distance for given theta,
+     dynamic pressure (in nPa) and Bz (in nT).
+
+    - theta : Angle from the x axis (model is cylindrical symmetry)
+         example : theta = np.arange( -np.pi+0.01, np.pi-0.01, 0.001)
+    - phi   : unused, azimuthal angle, to get the same interface as all models
+
+    kwargs:
+    - "pdyn": Dynamic Pressure in nPa
+    - "Bz"  : z component of IMF in nT
+
+    '''
+
+    Pd = kwargs.get("pdyn", 2)
+    Bz = kwargs.get("Bz", 1)
+
+    r0 = (10.22 + 1.29 * np.tanh(0.184 * (Bz + 8.14))) * Pd**(-1./6.6)
     a = (0.58-0.007*Bz)*(1+0.024*np.log(Pd))
-    theta = np.arange( -np.pi+0.01, np.pi-0.01, 0.001)
-    #theta = np.arange( -np.pi/2, np.pi/2+0.01, 0.01)
-
     r = r0*(2./(1+np.cos(theta)))**a
 
-    x = r*np.cos(theta)
-    y = r*np.sin(theta)
-    z = r*np.sin(theta)
 
-    pos=pd.DataFrame({'X' : x,
-                      'Y' : y,
-                      'Z' : z,})
+    base = kwargs.get("base", "cartesian")
+    if base == "cartesian":
+        x = r * np.cos(theta)
+        y = r * np.sin(theta)
+        z = r * np.sin(theta)
+        return x, y, z
+    elif base == "cylindrical":
+        return r, theta
+    raise ValueError("unknown base '{}'".format(kwargs["base"]))
 
-    return pos.dropna()
 
 
 def MP_Lin2010(phi_in ,th_in, Pd, Pm, Bz, tilt=0.):

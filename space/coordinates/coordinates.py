@@ -8,11 +8,11 @@ def spherical_to_cartesian(R, theta, phi):
     z = R * np.sin(theta)*np.sin(phi)
     return x, y, z
 
-def CartesianToSpherical(X,Y,Z):
-    R     = np.sqrt(X**2+Y**2+Z**2)
+def cartesian_to_spherical(X,Y,Z):
+    r     = np.sqrt(X**2+Y**2+Z**2)
     theta = np.arccos(X/R)
     phi   = np.arctan2(Z,Y)
-    return R,theta,phi
+    return r,theta,phi
 
 def BaseChoice(base,R,theta,phi):
     if base=='cartesian' :
