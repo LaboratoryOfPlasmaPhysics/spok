@@ -5,15 +5,14 @@ import sys
 sys.path.append('.')
 from .. import utils
 from ..coordinates import coordinates as coords
+from ..smath import resolve_poly2
 
 
 
-def checking_angles(theta, phi):
-    theta = utils.listify(theta)
-    phi = utils.listify(phi)
-    if (len(np.shape(theta)) == 1) & (len(np.shape(phi)) == 1) & (len(theta) > 1) & (len(phi) > 1):
-        theta, phi = np.meshgrid(theta, phi)
-        print('theta and phi are both 1D array : applying meshgrid to do a 3D boundaries')
+def _checking_angles(theta, phi):
+
+    if isinstance(theta, np.ndarray) and isinstance(theta, np.ndarray) and len(theta.shape) > 1 and len(phi.shape) > 1:
+        return np.meshgrid(theta, phi)
     return theta, phi
 
 
@@ -33,14 +32,13 @@ def _formisano1979(theta, phi, **kwargs):
 
 def formisano1979(theta, phi, **kwargs):
     '''
-    Formisano 2005 magnetopause model. Give the default position of the magnetopause.
+    Formisano 1979 magnetopause model. Give the default position of the magnetopause.
     function's arguments :
         - theta : angle in radiant, can be int, float or array (1D or 2D)
         - phi   : angle in radiant, can be int, float or array (1D or 2D)
     kwargs:
         - boundary  : "magnetopause", "bow_shock"
         - base  : can be "cartesian" (default) or "spherical"
-
 
     information : to get a particular point theta and phi must be an int or a float
     (ex : the nose of the boundary is given with the input theta=0 and phi=0). If a plan (2D) of
@@ -59,14 +57,22 @@ def formisano1979(theta, phi, **kwargs):
     else:
         raise ValueError("boundary: {} not allowed".format(kwargs["boundary"]))
 
-    theta, phi = checking_angles(theta, phi)
+    theta, phi = _checking_angles(theta, phi)
     r          =  _formisano1979(theta, phi, coefs = coefs)
     base       = kwargs.get("base", "cartesian")
     if base == "cartesian":
-        return coords.spherical_to_cartesian(R, theta, phi)
+        return coords.spherical_to_cartesian(r, theta, phi)
     elif base == "spherical":
         return r, theta, phi
     raise ValueError("unknown base '{}'".format(kwargs["base"]))
+
+
+
+def mp_formisano1979(theta, phi, **kwargs):
+    return formisano1979(theta, phi, boundary="magnetopause", **kwargs)
+
+def bs_formisano1979(theta, phi, **kwargs):
+    return formisano1979(theta, phi, boundary="bow_shock", **kwargs)
 
 
 
@@ -105,56 +111,11 @@ def Fairfield1971(x, args):
     return pos.dropna()
 
 
-def Formisano1979(x, args):
-
-    '''
-    Formisano 1979 : Magnetopause and Bow shock models. Give positions of the boudaries in plans (XY) with Z=0 and (XZ) with Y=0.
-    function's arguments :
-        - x :  X axis (array) in Re (earth radii)
-        - args : coefficients Aij are determined from many boundary crossings and they depend on upstream conditions.
-
-        --> Default parameter for the bow shock and the magnetopause respectively are :
-            default_bs_formisano = [0.52,1,1.05,0.13,-0.16,-0.08,47.53,-0.42,0.67,-613]
-            default_mp_formisano = [0.65,1,1.16,0.03,-0.28,-0.11,21.41,0.46,-0.36,-221]
-
-     return : DataFrame (Pandas) with the position (X,Y,Z) in Re of the wanted boudary to plot (XY) and (XZ) plans.
-    '''
-
-
-    a11,a22,a33,a12,a13,a23,a14,a24,a34,a44 = args[0],args[1],args[2],args[3],args[4],args[5],args[6],args[7],args[8],args[9]
-
-    a_y = a22
-    b_y = a12*x + a24
-    c_y = a11*x**2 + a14*x + a44
-
-    delta_y =(b_y**2-4*a_y*c_y)
-
-
-    ym = (-b_y - np.sqrt(delta_y))/(2*a_y)
-    yp = (-b_y + np.sqrt(delta_y))/(2*a_y)
-
-    a_z = a33
-    b_z = a13*x + a34
-    c_z = a11*x**2 + a14*x + a44
-
-    delta_z =(b_z**2-4*a_z*c_z)
-
-    zm = (-b_z - np.sqrt(delta_z))/(2*a_z)
-    zp = (-b_z + np.sqrt(delta_z))/(2*a_z)
-
-
-    pos=pd.DataFrame({'X' : np.concatenate([x, x[::-1]]),
-                      'Y' : np.concatenate([yp, ym[::-1]]),
-                      'Z' : np.concatenate([zp, zm[::-1]]),})
-
-    return pos.dropna()
 
 
 
 
-
-
-def BS_Jerab2005( Np, V, Ma, B, gamma=2.15 ):
+def bs_Jerab2005( Np, V, Ma, B, gamma=2.15 ):
 
     '''
     Jerab 2005 Bow shock model. Give positions of the box shock in plans (XY) with Z=0 and (XZ) with Y=0 as a function of the upstream solar wind.
@@ -215,7 +176,7 @@ def BS_Jerab2005( Np, V, Ma, B, gamma=2.15 ):
     return pos.sort_values('Y')
 
 
-def shue1998(theta, phi, **kwargs):
+def mp_shue1998(theta, phi, **kwargs):
     '''
     Shue 1998 Magnetopause model.
 
@@ -351,3 +312,60 @@ def MP_Lin2010(phi_in ,th_in, Pd, Pm, Bz, tilt=0.):
     return r+Q
 
 
+_models = {"mp_shue": mp_shue1998,
+           "mp_formisano1979": mp_formisano1979,
+           "bs_formisano1979": bs_formisano1979,
+           "bs_jerab": bs_Jerab2005}
+
+
+class Magnetosheath:
+    def __init__(self, **kwargs):
+        self.magnetopause = _models[kwargs.get("magnetopause", "shue")]
+        self.bow_shock = _models[kwargs.get("bow_shock", "jerab")]
+
+    def boundaries(self, theta, phi, **kwargs):
+        return self.magnetopause(theta, phi, **kwargs), self.bow_shock(theta, phi, **kwargs)
+
+
+def _interest_points(model, **kwargs):
+    dup = kwargs.copy()
+    dup["base"] = "cartesian"
+    x = model(0, 0, **dup)[0]
+    y = model(np.pi / 2, 0, **dup)[1]
+    xf = x - y ** 2 / (4 * x)
+    return x, y, xf
+
+
+def _parabolic_approx(theta, phi, x, xf, **kwargs):
+    theta, phi = _checking_angles(theta, phi)
+    K = x - xf
+    a = np.sin(theta) ** 2
+    b = 4 * K * np.cos(theta)
+    c = -4 * K * x
+    r = resolve_poly2(a, b, c)[0]
+    return coords.BaseChoice(kwargs.get("base", "cartesian"), r, theta, phi)
+
+
+class ParabolicMagnetosheath:
+    def __init__(self, **kwargs):
+        self._magnetopause = _models[kwargs.get("magnetopause", "shue")]
+        self._bow_shock = _models[kwargs.get("bow_shock", "jerab")]
+
+    def magnetopause(self, theta, phi, **kwargs):
+        return self._parabolize(theta, phi, **kwargs)[0]
+
+    def bow_shock(self, theta, phi, **kwargs):
+        return self._parabolize(theta, phi, **kwargs)[1]
+
+    def _parabolize(self, theta, phi, **kwargs):
+        xmp, y, xfmp = _interest_points(self._magnetopause, **kwargs)
+        xbs, y, xfbs = _interest_points(self._bow_shock, **kwargs)
+        if kwargs.get("confocal", False) is True:
+            xfmp = xmp / 2
+            xfbs = xmp / 2
+        mp_coords = _parabolic_approx(theta, phi, xmp, xfmp, **kwargs)
+        bs_coords = _parabolic_approx(theta, phi, xbs, xfbs, **kwargs)
+        return mp_coords, bs_coords
+
+    def boundaries(self, theta, phi, **kwargs):
+        return self._parabolize(theta, phi, **kwargs)
