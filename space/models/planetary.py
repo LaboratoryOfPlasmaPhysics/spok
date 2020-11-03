@@ -5,15 +5,14 @@ import sys
 sys.path.append('.')
 from .. import utils
 from ..coordinates import coordinates as coords
+from ..smath import resolve_poly2
 
 
 
-def _checking_angles(theta,phi):
-    theta = utils.listify(theta)
-    phi = utils.listify(phi)
-    if (len(np.shape(theta)) == 1) & (len(np.shape(phi)) == 1) & (len(theta) > 1) & (len(phi) > 1):
-        theta, phi = np.meshgrid(theta, phi)
-        print('theta and phi are both 1D array : applying meshgrid to do a 3D boundaries')
+def _checking_angles(theta, phi):
+
+    if isinstance(theta, np.ndarray) and isinstance(theta, np.ndarray) and len(theta.shape) > 1 and len(phi.shape) > 1:
+        return np.meshgrid(theta, phi)
     return theta, phi
 
 
@@ -62,10 +61,18 @@ def formisano1979(theta, phi, **kwargs):
     r          =  _formisano1979(theta, phi, coefs = coefs)
     base       = kwargs.get("base", "cartesian")
     if base == "cartesian":
-        return coords.spherical_to_cartesian(R, theta, phi)
+        return coords.spherical_to_cartesian(r, theta, phi)
     elif base == "spherical":
         return r, theta, phi
     raise ValueError("unknown base '{}'".format(kwargs["base"]))
+
+
+
+def mp_formisano1979(theta, phi, **kwargs):
+    return formisano1979(theta, phi, boundary="magnetopause", **kwargs)
+
+def bs_formisano1979(theta, phi, **kwargs):
+    return formisano1979(theta, phi, boundary="bow_shock", **kwargs)
 
 
 
@@ -108,7 +115,7 @@ def Fairfield1971(x, args):
 
 
 
-def BS_Jerab2005( Np, V, Ma, B, gamma=2.15 ):
+def bs_Jerab2005( Np, V, Ma, B, gamma=2.15 ):
 
     '''
     Jerab 2005 Bow shock model. Give positions of the box shock in plans (XY) with Z=0 and (XZ) with Y=0 as a function of the upstream solar wind.
@@ -169,7 +176,7 @@ def BS_Jerab2005( Np, V, Ma, B, gamma=2.15 ):
     return pos.sort_values('Y')
 
 
-def shue1998(theta, phi, **kwargs):
+def mp_shue1998(theta, phi, **kwargs):
     '''
     Shue 1998 Magnetopause model.
 
@@ -305,3 +312,60 @@ def MP_Lin2010(phi_in ,th_in, Pd, Pm, Bz, tilt=0.):
     return r+Q
 
 
+_models = {"mp_shue": mp_shue1998,
+           "mp_formisano1979": mp_formisano1979,
+           "bs_formisano1979": bs_formisano1979,
+           "bs_jerab": bs_Jerab2005}
+
+
+class Magnetosheath:
+    def __init__(self, **kwargs):
+        self.magnetopause = _models[kwargs.get("magnetopause", "shue")]
+        self.bow_shock = _models[kwargs.get("bow_shock", "jerab")]
+
+    def boundaries(self, theta, phi, **kwargs):
+        return self.magnetopause(theta, phi, **kwargs), self.bow_shock(theta, phi, **kwargs)
+
+
+def _interest_points(model, **kwargs):
+    dup = kwargs.copy()
+    dup["base"] = "cartesian"
+    x = model(0, 0, **dup)[0]
+    y = model(np.pi / 2, 0, **dup)[1]
+    xf = x - y ** 2 / (4 * x)
+    return x, y, xf
+
+
+def _parabolic_approx(theta, phi, x, xf, **kwargs):
+    theta, phi = _checking_angles(theta, phi)
+    K = x - xf
+    a = np.sin(theta) ** 2
+    b = 4 * K * np.cos(theta)
+    c = -4 * K * x
+    r = resolve_poly2(a, b, c)[0]
+    return coords.BaseChoice(kwargs.get("base", "cartesian"), r, theta, phi)
+
+
+class ParabolicMagnetosheath:
+    def __init__(self, **kwargs):
+        self._magnetopause = _models[kwargs.get("magnetopause", "shue")]
+        self._bow_shock = _models[kwargs.get("bow_shock", "jerab")]
+
+    def magnetopause(self, theta, phi, **kwargs):
+        return self._parabolize(theta, phi, **kwargs)[0]
+
+    def bow_shock(self, theta, phi, **kwargs):
+        return self._parabolize(theta, phi, **kwargs)[1]
+
+    def _parabolize(self, theta, phi, **kwargs):
+        xmp, y, xfmp = _interest_points(self._magnetopause, **kwargs)
+        xbs, y, xfbs = _interest_points(self._bow_shock, **kwargs)
+        if kwargs.get("confocal", False) is True:
+            xfmp = xmp / 2
+            xfbs = xmp / 2
+        mp_coords = _parabolic_approx(theta, phi, xmp, xfmp, **kwargs)
+        bs_coords = _parabolic_approx(theta, phi, xbs, xfbs, **kwargs)
+        return mp_coords, bs_coords
+
+    def boundaries(self, theta, phi, **kwargs):
+        return self._parabolize(theta, phi, **kwargs)
