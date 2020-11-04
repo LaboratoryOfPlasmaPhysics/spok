@@ -318,14 +318,6 @@ _models = {"mp_shue": mp_shue1998,
            "bs_jerab": bs_Jerab2005}
 
 
-class Magnetosheath:
-    def __init__(self, **kwargs):
-        self.magnetopause = _models[kwargs.get("magnetopause", "shue")]
-        self.bow_shock = _models[kwargs.get("bow_shock", "jerab")]
-
-    def boundaries(self, theta, phi, **kwargs):
-        return self.magnetopause(theta, phi, **kwargs), self.bow_shock(theta, phi, **kwargs)
-
 
 def _interest_points(model, **kwargs):
     dup = kwargs.copy()
@@ -346,16 +338,46 @@ def _parabolic_approx(theta, phi, x, xf, **kwargs):
     return coords.BaseChoice(kwargs.get("base", "cartesian"), r, theta, phi)
 
 
-class ParabolicMagnetosheath:
+
+def check_parabconfoc(func):
+    def wrapper(self, theta, phi, **kwargs):
+        kwargs["parabolic"] = kwargs.get("parabolic", False)
+        kwargs["confocal"] = kwargs.get("confocal", False)
+        if kwargs["parabolic"] is False and kwargs["confocal"] is True:
+            raise ValueError("cannot be confocal if not parabolic")
+        return func(self, theta, phi, **kwargs)
+    return wrapper
+
+
+class Magnetosheath:
     def __init__(self, **kwargs):
         self._magnetopause = _models[kwargs.get("magnetopause", "shue")]
         self._bow_shock = _models[kwargs.get("bow_shock", "jerab")]
 
-    def magnetopause(self, theta, phi, **kwargs):
-        return self._parabolize(theta, phi, **kwargs)[0]
 
+    @check_parabconfoc
+    def magnetopause(self, theta, phi, **kwargs):
+        if kwargs["parabolic"]:
+            return self._parabolize(theta, phi, **kwargs)[0]
+        else:
+            return self._magnetopause(theta, phi, **kwargs)
+
+
+    @check_parabconfoc
     def bow_shock(self, theta, phi, **kwargs):
-        return self._parabolize(theta, phi, **kwargs)[1]
+        if kwargs["parabolic"]:
+            return self._parabolize(theta, phi, **kwargs)[1]
+        else:
+            return self._magnetopause(theta, phi, **kwargs)
+
+    @check_parabconfoc
+    def boundaries(self, theta, phi, **kwargs):
+        if kwargs["parabolic"]:
+            return self._parabolize(theta, phi, **kwargs)
+        else:
+            return self._magnetopause(theta, phi, **kwargs),\
+                   self._bow_shock(theta, phi, **kwargs)
+
 
     def _parabolize(self, theta, phi, **kwargs):
         xmp, y, xfmp = _interest_points(self._magnetopause, **kwargs)
@@ -366,6 +388,3 @@ class ParabolicMagnetosheath:
         mp_coords = _parabolic_approx(theta, phi, xmp, xfmp, **kwargs)
         bs_coords = _parabolic_approx(theta, phi, xbs, xfbs, **kwargs)
         return mp_coords, bs_coords
-
-    def boundaries(self, theta, phi, **kwargs):
-        return self._parabolize(theta, phi, **kwargs)
