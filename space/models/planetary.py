@@ -368,7 +368,7 @@ class Magnetosheath:
         if kwargs["parabolic"]:
             return self._parabolize(theta, phi, **kwargs)[1]
         else:
-            return self._magnetopause(theta, phi, **kwargs)
+            return self._bow_shock(theta, phi, **kwargs)
 
     @check_parabconfoc
     def boundaries(self, theta, phi, **kwargs):
