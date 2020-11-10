@@ -18,6 +18,9 @@ space
 
 Space Plasma Analysis CodE
 
+.. image:: https://user-images.githubusercontent.com/3200931/98716891-978e2180-238c-11eb-9487-07c66221e5bb.png
+
+
 
 * Free software: GNU General Public License v3
 * Documentation: https://space.readthedocs.io.
