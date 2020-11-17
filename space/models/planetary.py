@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+from scipy import constants as cst
 
 import sys
 sys.path.append('.')
@@ -111,28 +112,22 @@ def Fairfield1971(x, args):
     return pos.dropna()
 
 
-
-
-
-
-def bs_Jerab2005( Np, V, Ma, B, gamma=2.15 ):
-
+def bs_Jerab2005(theta, phi, **kwargs):
     '''
     Jerab 2005 Bow shock model. Give positions of the box shock in plans (XY) with Z=0 and (XZ) with Y=0 as a function of the upstream solar wind.
     function's arguments :
         - Np : Proton density of the upstream conditions
         - V  : Speed of the solar wind
-        - Ma : Alfven Mach number
         - B  : Intensity of interplanetary magnetic field
         - gamma : Polytropic index ( default gamma=2.15)
 
 
-        --> mean parameters :  Np=7.35, V=425.5, Ma=11.23, B=5.49
+        --> mean parameters :  Np=7.35, V=425.5,  B=5.49
 
      return : DataFrame (Pandas) with the position (X,Y,Z) in Re of the bow shock to plot (XY) and (XZ) plans.
     '''
 
-    def make_Rav(theta,phi):
+    def make_Rav(theta, phi):
         a11 = 0.45
         a22 = 1
         a33 = 0.8
@@ -142,38 +137,40 @@ def bs_Jerab2005( Np, V, Ma, B, gamma=2.15 ):
         a34 = -0.6
         a44 = -618
 
-        a = a11*np.cos(theta)**2 + np.sin(theta)**2 *( a22*np.cos(phi)**2 + a33*np.sin(phi)**2 )
-        b = a14*np.cos(theta) +  np.sin(theta) *( a24*np.cos(phi) + a34*np.sin(phi) )
+        a = a11 * np.cos(theta) ** 2 + np.sin(theta) ** 2 * (a22 * np.cos(phi) ** 2 + a33 * np.sin(phi) ** 2)
+        b = a14 * np.cos(theta) + np.sin(theta) * (a24 * np.cos(phi) + a34 * np.sin(phi))
         c = a44
 
-        delta = b**2 -4*a*c
+        delta = b ** 2 - 4 * a * c
 
-        R = (-b + np.sqrt(delta))/(2*a)
+        R = (-b + np.sqrt(delta)) / (2 * a)
         return R
 
-
-
     C = 91.55
-    D = 0.937*(0.846 + 0.042*B )
-    R0 = make_Rav(0,0)
+    D = 0.937 * (0.846 + 0.042 * B)
+    R0 = make_Rav(0, 0)
 
-    theta = np.linspace(0,2.5,200)
-    phi = [np.pi,0]
+    Np    = kwargs.get('Np', 6.025)
+    V     = kwargs.get('V', 427.496)
+    B     = kwargs.get('B', 5.554)
+    gamma = kwargs.get('gamma',2.15)
+    Ma = V * 1e3 * np.sqrt(Np * 1e6 * cst.m_p * cst.mu_0) / (B * 1e-9)
 
-    x,y= [],[]
-
-    for p in phi:
-        Rav = make_Rav(theta,p)
-        K = ((gamma-1)*Ma**2+2)/((gamma+1)*(Ma**2-1))
-        R = (Rav/R0)*(C/(Np*V**2)**(1/6))*(1+ D*K)
-
-        x = np.concatenate([x, R*np.cos(theta)])
-        y = np.concatenate([y, R*np.sin(theta)*np.cos(p)])
+    Rav = make_Rav(theta, phi)
+    K = ((gamma - 1) * Ma ** 2 + 2) / ((gamma + 1) * (Ma ** 2 - 1))
+    r = (Rav / R0) * (C / (Np * V ** 2) ** (1 / 6)) * (1 + D * K)
 
 
-    pos = pd.DataFrame({'X' : x , 'Y' : y, 'Z' : y})
+    base = kwargs.get('base', 'cartesian')
 
-    return pos.sort_values('Y')
+    if base == "cartesian":
+        x = r * np.cos(theta)
+        y = r * np.sin(theta)
+        z = r * np.sin(theta)
+        return x, y, z
+    elif base == "spherical":
+        return r, theta, phi
+    raise ValueError("unknown base '{}'".format(kwargs["base"]))
 
 
 def mp_shue1998(theta, phi, **kwargs):
