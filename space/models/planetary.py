@@ -146,15 +146,17 @@ def bs_Jerab2005(theta, phi, **kwargs):
         R = (-b + np.sqrt(delta)) / (2 * a)
         return R
 
+    Np = kwargs.get('Np', 6.025)
+    V = kwargs.get('V', 427.496)
+    B = kwargs.get('B', 5.554)
+    gamma = kwargs.get('gamma', 2.15)
+    Ma = V * 1e3 * np.sqrt(Np * 1e6 * cst.m_p * cst.mu_0) / (B * 1e-9)
+
     C = 91.55
     D = 0.937 * (0.846 + 0.042 * B)
     R0 = make_Rav(0, 0)
 
-    Np    = kwargs.get('Np', 6.025)
-    V     = kwargs.get('V', 427.496)
-    B     = kwargs.get('B', 5.554)
-    gamma = kwargs.get('gamma',2.15)
-    Ma = V * 1e3 * np.sqrt(Np * 1e6 * cst.m_p * cst.mu_0) / (B * 1e-9)
+
 
     Rav = make_Rav(theta, phi)
     K = ((gamma - 1) * Ma ** 2 + 2) / ((gamma + 1) * (Ma ** 2 - 1))
