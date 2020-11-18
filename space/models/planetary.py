@@ -312,37 +312,32 @@ def MP_Lin2010(phi_in ,th_in, Pd, Pm, Bz, tilt=0.):
 
 
 def mp_liu2015(theta, phi, **kwargs):
-
-    if isinstance(theta, np.ndarray )  | isinstance(theta,pd.Series):
+    if isinstance(theta, np.ndarray) | isinstance(theta, pd.Series):
         idx = np.where(theta < 0)[0]
-        if isinstance(phi, np.ndarray )  | isinstance(phi,pd.Series):
-            phi[idx]=phi[idx]+np.pi
-        else :
-            phi = phi*np.ones(theta.shape)
-            phi[idx]=phi[idx]+np.pi
+        if isinstance(phi, np.ndarray) | isinstance(phi, pd.Series):
+            phi[idx] = phi[idx] + np.pi
+        else:
+            phi = phi * np.ones(theta.shape)
+            phi[idx] = phi[idx] + np.pi
     else:
-        phi =phi+(theta<0)*np.pi
+        phi = phi + (theta < 0) * np.pi
 
-
-    theta = np.sign(theta)*theta
-
-
+    theta = np.sign(theta) * theta
 
     Pd = kwargs.get('Pd', 2.056)
     Bx = kwargs.get('Bx', 0.032)
     By = kwargs.get('By', -0.015)
     Bz = kwargs.get('Bz', -0.001)
     tilt = kwargs.get('tilt', 0)
-    B_param =[('Bx' in kwargs) , ('By' in kwargs) , ('Bz' in kwargs)]
+    B_param = [('Bx' in kwargs), ('By' in kwargs), ('Bz' in kwargs)]
     if all(B_param):
         Pm = (Bx ** 2 + By ** 2 + Bz ** 2) * 1e-18 / (2 * cst.mu_0) * 1e9
     elif not any(B_param):
         Pm = 0.016
-    else :
+    else:
         raise ValueError('None or all Bx, By, Bz parameters must be set')
 
-
-    P = Pd+Pm
+    P = Pd + Pm
 
     r0 = (10.56 + 0.956 * np.tanh(0.1795 * (Bz + 10.78))) * P ** (-0.1699)
 
@@ -354,10 +349,18 @@ def mp_liu2015(theta, phi, **kwargs):
 
     delta_alpha = 0.02582 * np.tanh(0.0667 * Bx) * np.sign(Bx)
 
-    if Bz != 0:
-        omega = np.arctan2(0.1718 * By * (By ** 2 + Bz ** 2) ** 0.194, Bz)
+    if isinstance(Bz, np.ndarray) | isinstance(Bz, pd.Series):
+        idx_zero = np.where(Bz != 0)[0]
+        omega = np.zeros_like(np.shape(Bz))
+        omega = omega + np.sign(By) * np.pi / 2
+        omega[idx_zero] = np.arctan2(0.1718 * By[idx_zero] * (By[idx_zero] ** 2 + Bz[idx_zero] ** 2) ** 0.194,
+                                     Bz[idx_zero])
+
     else:
-        omega = np.sign(By) * np.pi / 2
+        if Bz != 0:
+            omega = np.arctan2(0.1718 * By * (By ** 2 + Bz ** 2) ** 0.194, Bz)
+        else:
+            omega = np.sign(By) * np.pi / 2
 
     alpha = alpha_0 + alpha_z * np.cos(phi) + (alpha_phi + delta_alpha * np.sign(np.cos(phi))) * np.cos(
         2 * (phi - omega))
@@ -367,7 +370,7 @@ def mp_liu2015(theta, phi, **kwargs):
     w = (0.2382 + 0.005806 * np.log(Pd)) * (1 + 0.0002335 * tilt ** 2)
 
     C = np.exp(-abs(theta - l_n) / w) * (1 + np.sign(np.cos(phi))) + np.exp(-abs(theta - l_s) / w) * (
-            1 + np.sign(-np.cos(phi)))
+        1 + np.sign(-np.cos(phi)))
 
     r = (r0 * (2 / (1 + np.cos(theta))) ** alpha) * (1 - 0.1 * C * np.cos(phi) ** 2)
 
@@ -380,7 +383,6 @@ def mp_liu2015(theta, phi, **kwargs):
     elif base == "spherical":
         return r, theta, phi
     raise ValueError("unknown base '{}'".format(kwargs["base"]))
-
 
 _models = {"mp_shue1998": mp_shue1998,
            "mp_formisano1979": mp_formisano1979,
