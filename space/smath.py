@@ -6,7 +6,7 @@ def norm(u, v, w):
 
 
 def resolve_poly2(a, b, c):
-    if isinstance(a, (np.ndarray | pd.Series):
+    if isinstance(a, (np.ndarray | pd.Series)):
         r1 = np.zeros_like(a)
         r2 = np.zeros_like(a)
         a_null = np.where(np.abs(a) < 1e-6)[0]
