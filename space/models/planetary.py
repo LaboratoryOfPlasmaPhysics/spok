@@ -388,9 +388,17 @@ def mp_liu2015(theta, phi, **kwargs):
 
 _models = {"mp_shue1998": mp_shue1998,
            "mp_formisano1979": mp_formisano1979,
+           "mp_liu2015" : mp_liu2015,
            "bs_formisano1979": bs_formisano1979,
            "bs_jerab2005": bs_Jerab2005}
 
+
+def available(model):
+    if model == "magnetopause":
+        return tuple([m for m in _models.keys() if m.startswith("mp_")])
+    elif model == "bow_shock":
+        return tuple([m for m in _models.keys() if m.startswith("bs_")])
+    raise ValueError("invalid model type")
 
 
 def _interest_points(model, **kwargs):
@@ -425,13 +433,18 @@ def check_parabconfoc(func):
 
 class Magnetosheath:
     def __init__(self, **kwargs):
-        mp = kwargs.get("magnetopause","mp_shue1998")
-        bs = kwargs.get("bow_shock", "bs_jerab2005")
-        if not mp.startswith("mp_") or not bs.startswith("bs_"):
-            raise ValueError("invalid model name")
-        self._magnetopause = _models[kwargs.get("magnetopause", "shue")]
-        self._bow_shock = _models[kwargs.get("bow_shock", "jerab")]
 
+        kwargs["magnetopause"] = kwargs.get("magnetopause", "mp_shue1998")
+        kwargs["bow_shock"] = kwargs.get("bow_shock", "bs_jerab2005")
+
+        if not kwargs["magnetopause"].startswith("mp_") \
+            or not kwargs["bow_shock"].startswith("bs_"):
+            raise ValueError("invalid model name")
+
+        self._magnetopause = _models[kwargs["magnetopause"]]
+        self._bow_shock = _models[kwargs["bow_shock"]]
+        self.model_magnetopause = kwargs["magnetopause"]
+        self.model_bow_shock = kwargs["bow_shock"]
 
     @check_parabconfoc
     def magnetopause(self, theta, phi, **kwargs):
