@@ -386,11 +386,19 @@ def mp_liu2015(theta, phi, **kwargs):
 
 
 
-_models = {"mp_shue": mp_shue1998,
+_models = {"mp_shue1998": mp_shue1998,
            "mp_formisano1979": mp_formisano1979,
+           "mp_liu2015" : mp_liu2015,
            "bs_formisano1979": bs_formisano1979,
-           "bs_jerab": bs_Jerab2005}
+           "bs_jerab2005": bs_Jerab2005}
 
+
+def available(model):
+    if model == "magnetopause":
+        return tuple([m for m in _models.keys() if m.startswith("mp_")])
+    elif model == "bow_shock":
+        return tuple([m for m in _models.keys() if m.startswith("bs_")])
+    raise ValueError("invalid model type")
 
 
 def _interest_points(model, **kwargs):
@@ -408,7 +416,7 @@ def _parabolic_approx(theta, phi, x, xf, **kwargs):
     a = np.sin(theta) ** 2
     b = 4 * K * np.cos(theta)
     c = -4 * K * x
-    r = resolve_poly2(a, b, c)[0]
+    r = resolve_poly2(a, b, c, 0)
     return coords.BaseChoice(kwargs.get("base", "cartesian"), r, theta, phi)
 
 
@@ -425,9 +433,18 @@ def check_parabconfoc(func):
 
 class Magnetosheath:
     def __init__(self, **kwargs):
-        self._magnetopause = _models[kwargs.get("magnetopause", "shue")]
-        self._bow_shock = _models[kwargs.get("bow_shock", "jerab")]
 
+        kwargs["magnetopause"] = kwargs.get("magnetopause", "mp_shue1998")
+        kwargs["bow_shock"] = kwargs.get("bow_shock", "bs_jerab2005")
+
+        if not kwargs["magnetopause"].startswith("mp_") \
+            or not kwargs["bow_shock"].startswith("bs_"):
+            raise ValueError("invalid model name")
+
+        self._magnetopause = _models[kwargs["magnetopause"]]
+        self._bow_shock = _models[kwargs["bow_shock"]]
+        self.model_magnetopause = kwargs["magnetopause"]
+        self.model_bow_shock = kwargs["bow_shock"]
 
     @check_parabconfoc
     def magnetopause(self, theta, phi, **kwargs):
