@@ -411,14 +411,22 @@ def _interest_points(model, **kwargs):
     xf = x - y ** 2 / (4 * x)
     return x, y, xf
 
-
 def _parabolic_approx(theta, phi, x, xf, **kwargs):
-    theta, phi = _checking_angles(theta, phi)
     K = x - xf
     a = np.sin(theta) ** 2
     b = 4 * K * np.cos(theta)
     c = -4 * K * x
-    r = resolve_poly2(a, b, c, 1)
+    if isinstance(theta, np.ndarray) | isinstance(theta, pd.Series):
+        if not isinstance(c, np.ndarray) | isinstance(c, pd.Series):
+            c = np.ones(len(a))*c
+        r = resolve_poly2(a, b, c, 1)
+        idx = np.where((theta>np.pi/2) | (theta<-np.pi/2) )[0]
+        r[idx] = resolve_poly2(a[idx], b[idx], c[idx], 0)
+    else :
+        if (theta>np.pi/2) | (theta<-np.pi/2) :
+            r = resolve_poly2(a, b, c, 0)
+        else :
+            r = resolve_poly2(a, b, c, 1)
     return coords.BaseChoice(kwargs.get("base", "cartesian"), r, theta, phi)
 
 
