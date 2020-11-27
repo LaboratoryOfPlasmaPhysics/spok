@@ -418,7 +418,7 @@ def _parabolic_approx(theta, phi, x, xf, **kwargs):
     a = np.sin(theta) ** 2
     b = 4 * K * np.cos(theta)
     c = -4 * K * x
-    r = resolve_poly2(a, b, c, 0)
+    r = resolve_poly2(a, b, c, 1)
     return coords.BaseChoice(kwargs.get("base", "cartesian"), r, theta, phi)
 
 
