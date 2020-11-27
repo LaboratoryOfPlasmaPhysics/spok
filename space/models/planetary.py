@@ -8,6 +8,7 @@ from .. import utils
 from ..coordinates import coordinates as coords
 from ..smath import resolve_poly2
 
+import astropy
 
 
 def _checking_angles(theta, phi):
@@ -58,8 +59,7 @@ def formisano1979(theta, phi, **kwargs):
     else:
         raise ValueError("boundary: {} not allowed".format(kwargs["boundary"]))
 
-    theta, phi = _checking_angles(theta, phi)
-    r          =  _formisano1979(theta, phi, coefs = coefs)
+    r          =  _formisano1979(theta, phi, coefs = coefs) * astropy.constants.R_earth.to('km')
     base       = kwargs.get("base", "cartesian")
     if base == "cartesian":
         return coords.spherical_to_cartesian(r, theta, phi)
@@ -160,7 +160,7 @@ def bs_Jerab2005(theta, phi, **kwargs):
 
     Rav = make_Rav(theta, phi)
     K = ((gamma - 1) * Ma ** 2 + 2) / ((gamma + 1) * (Ma ** 2 - 1))
-    r = (Rav / R0) * (C / (Np * V ** 2) ** (1 / 6)) * (1 + D * K)
+    r = (Rav / R0) * (C / (Np * V ** 2) ** (1 / 6)) * (1 + D * K) * astropy.constants.R_earth.to('km')
 
 
     base = kwargs.get('base', 'cartesian')
@@ -197,7 +197,8 @@ def mp_shue1998(theta, phi, **kwargs):
 
     r0 = (10.22 + 1.29 * np.tanh(0.184 * (Bz + 8.14))) * Pd**(-1./6.6)
     a = (0.58-0.007*Bz)*(1+0.024*np.log(Pd))
-    r = r0*(2./(1+np.cos(theta)))**a
+    r = r0*(2./(1+np.cos(theta)))**a * astropy.constants.R_earth.to('km')
+
 
 
     base = kwargs.get("base", "cartesian")
@@ -308,7 +309,7 @@ def MP_Lin2010(phi_in ,th_in, Pd, Pm, Bz, tilt=0.):
     Q = c['n']*np.exp(d['n']*PHI['n']**e['n'])
     Q = Q + c['s']*np.exp(d['s']*PHI['s']**e['s'])
 
-    return r+Q
+    return (r+Q) * astropy.constants.R_earth.to('km')
 
 def mp_liu2015(theta, phi, **kwargs):
     if isinstance(theta, np.ndarray) | isinstance(theta, pd.Series):
