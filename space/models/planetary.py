@@ -1,32 +1,68 @@
 import numpy as np
 import pandas as pd
 from scipy import constants as cst
+from datetime import timedelta, datetime
 
 import sys
 
 sys.path.append('.')
 from ..coordinates import coordinates as coords
-from ..smath import resolve_poly2
+from ..smath import resolve_poly2_real_roots
+from ..smath import norm as mnorm
+from ..utils import listify
 
 
-def _checking_angles(theta, phi):
-    if isinstance(theta, np.ndarray) and isinstance(theta, np.ndarray) and len(theta.shape) > 1 and len(phi.shape) > 1:
-        return np.meshgrid(theta, phi)
-    return theta, phi
+
+
+def tilt_earth_normal_year():
+    tilts = np.zeros(365)+np.nan
+    tilts[:79] = np.linspace(-34,0,89)[10:]
+    tilts[79:172] = np.linspace(0,34,93)
+    tilts[172:265] = np.linspace(34,0,93)
+    tilts[265:355] = np.linspace(0,-34,90)
+    tilts[355:] = np.linspace(-34,0,89)[:10]
+    return tilts*np.pi/180
+
+
+def tilt_earth_bissextile_year():
+    tilts = np.zeros(366)+np.nan
+    tilts[:80] = np.linspace(-34,0,90)[10:]
+    tilts[80:173] = np.linspace(0,34,93)
+    tilts[173:266] = np.linspace(34,0,93)
+    tilts[266:356] = np.linspace(0,-34,90)
+    tilts[356:] = np.linspace(-34,0,90)[:10]
+    return tilts*np.pi/180
+
+
+def get_tilt(date):
+    years = pd.DatetimeIndex(date).year
+    days = pd.to_numeric(pd.DatetimeIndex(date).strftime('%j'))-1
+    n_days_year = ((pd.to_datetime((years+1).astype(str))-pd.to_datetime(years.astype(str)))/timedelta(days=1)).astype(int).values
+    year_tilts = tilt_earth_normal_year()
+    year_bis_tilts =tilt_earth_bissextile_year()
+    tilts = np.zeros(len(date))
+    tilts[n_days_year==366]= year_bis_tilts[days[n_days_year==366]]
+    tilts[n_days_year==365]= year_tilts[days[n_days_year==365]]
+    return tilts
+
 
 
 def _formisano1979(theta, phi, **kwargs):
     a11, a22, a33, a12, a13, a23, a14, a24, a34, a44 = kwargs["coefs"]
-    ct = np.cos(theta)
-    st = np.sin(theta)
-    cp = np.cos(phi)
-    sp = np.sin(phi)
-    A = a11 * ct ** 2 + st ** 2 * (a22 * cp ** 2 + a33 * sp ** 2) \
-        + ct * st * (a12 * cp + a13 * sp) + a23 * st ** 2 * cp * sp
-    B = a14 * ct + st * (a24 * cp + a34 * sp)
+
+    if 'Pd' in kwargs:
+        a14 = a14 * (2.056 / kwargs['Pd']) ** (1 / 6)
+        a44 = a44 * (2.056 / kwargs['Pd']) ** (1 / 3)
+    x = np.cos(theta)
+    y = np.sin(theta)*np.sin(phi)
+    z = np.sin(theta)*np.cos(phi)
+    A = a11 * x ** 2 + a22 * y ** 2 + a33 * z ** 2 + a12 * x * y + a13 * x * z + a23 * y * z
+    B = a14 * x + a24 * y + a34 * z
     C = a44
     D = B ** 2 - 4 * A * C
     return (-B + np.sqrt(D)) / (2 * A)
+
+
 
 
 def formisano1979(theta, phi, **kwargs):
@@ -37,7 +73,7 @@ def formisano1979(theta, phi, **kwargs):
         - phi   : angle in radiant, can be int, float or array (1D or 2D)
     kwargs:
         - boundary  : "magnetopause", "bow_shock"
-        - base  : can be "cartesian" (default) or "spherical"
+        - coord_sys  : can be "cartesian" (default) or "spherical"
 
     information : to get a particular point theta and phi must be an int or a float
     (ex : the nose of the boundary is given with the input theta=0 and phi=0). If a plan (2D) of
@@ -46,25 +82,22 @@ def formisano1979(theta, phi, **kwargs):
     theta=np.linespace(-np.pi/2,np.pi/2,100) and phi=0). To get the 3D boundary theta and phi
     must be given an array, if it is two 1D array a meshgrid will be performed to obtain a two 2D array.
 
-    return : X,Y,Z (base="cartesian")or R,theta,phi (base="spherical") depending on the chosen base
+    return : X,Y,Z (coord_sys="cartesian")or R,theta,phi (coord_sys="spherical") depending on the chosen coord_sys
     '''
 
     if kwargs["boundary"] == "magnetopause":
-        coefs = [0.65, 1, 1.16, 0.03, -0.28, -0.11, 21.41, 0.46, -0.36, -221]
+        coefs = [0.65, 1, 1.16, 0.03, -0.28, -0.11, 21.41, 0.46, -0.36, -221] # coeff magnetopause  Romashets 2019 with aberration, take into account earth's rotation
+        #coefs = [0.66, 1, 1.16, 0.08, -0.29, -0.09, 21.47, -0.97, -0.36, -222] # coeff magnetopause Romashets 2019 without aberation
     elif kwargs["boundary"] == "bow_shock":
-        coefs = [0.52, 1, 1.05, 0.13, -0.16, -0.08, 47.53, -0.42, 0.67, -613]
+        coefs = [0.52, 1, 1.05, 0.13, -0.16, -0.08, 47.53, -0.42, 0.67, -613] # coeff bow shock  Romashets 2019 with aberration, take into account earth's rotation
+        #coefs = [0.54,1,1.06,0.19,-0.17,-0.07,47.90,-3.62,0.68,-619] # coeff bow shock  Romashets 2019 without aberation
     else:
         raise ValueError("boundary: {} not allowed".format(kwargs["boundary"]))
 
-    theta, phi = _checking_angles(theta, phi)
-    r = _formisano1979(theta, phi, coefs=coefs)
-    base = kwargs.get("base", "cartesian")
-    if base == "cartesian":
-        return coords.spherical_to_cartesian(r, theta, phi)
-    elif base == "spherical":
-        return r, theta, phi
-    raise ValueError("unknown base '{}'".format(kwargs["base"]))
 
+    r = _formisano1979(theta, phi, coefs=coefs,**kwargs)
+
+    return coords.choice_coordinate_system(r, theta, phi, **kwargs)
 
 def mp_formisano1979(theta, phi, **kwargs):
     return formisano1979(theta, phi, boundary="magnetopause", **kwargs)
@@ -131,8 +164,12 @@ def bs_Jerab2005(theta, phi, **kwargs):
         a34 = -0.6
         a44 = -618
 
-        a = a11 * np.cos(theta) ** 2 + np.sin(theta) ** 2 * (a22 * np.cos(phi) ** 2 + a33 * np.sin(phi) ** 2)
-        b = a14 * np.cos(theta) + np.sin(theta) * (a24 * np.cos(phi) + a34 * np.sin(phi))
+        x = np.cos(theta)
+        y = np.sin(theta) * np.sin(phi)
+        z = np.sin(theta) * np.cos(phi)
+
+        a = a11 * x ** 2 +  a22 * y ** 2 + a33 * z ** 2 + a12 * x * y
+        b = a14 * x + a24 * y + a34 * z
         c = a44
 
         delta = b ** 2 - 4 * a * c
@@ -143,7 +180,7 @@ def bs_Jerab2005(theta, phi, **kwargs):
     Np = kwargs.get('Np', 6.025)
     V = kwargs.get('V', 427.496)
     B = kwargs.get('B', 5.554)
-    gamma = kwargs.get('gamma', 2.15)
+    gamma = kwargs.get('gamma', 5./3)
     Ma = V * 1e3 * np.sqrt(Np * 1e6 * cst.m_p * cst.mu_0) / (B * 1e-9)
 
     C = 91.55
@@ -154,16 +191,26 @@ def bs_Jerab2005(theta, phi, **kwargs):
     K = ((gamma - 1) * Ma ** 2 + 2) / ((gamma + 1) * (Ma ** 2 - 1))
     r = (Rav / R0) * (C / (Np * V ** 2) ** (1 / 6)) * (1 + D * K)
 
-    base = kwargs.get('base', 'cartesian')
+    return coords.choice_coordinate_system(r, theta, phi, **kwargs)
 
-    if base == "cartesian":
-        x = r * np.cos(theta)
-        y = r * np.sin(theta) * np.cos(phi)
-        z = r * np.sin(theta) * np.sin(phi)
-        return x, y, z
-    elif base == "spherical":
-        return r, theta, phi
-    raise ValueError("unknown base '{}'".format(kwargs["base"]))
+
+def mp_shue1997(theta, phi, **kwargs):
+    Pd = kwargs.get("Pd", 2.056)
+    Bz = kwargs.get("Bz", -0.001)
+
+    if isinstance(Bz, float) | isinstance(Bz, int):
+        if Bz >= 0:
+            r0 = (11.4 + 0.13 * Bz) * Pd ** (-1 / 6.6)
+        else:
+            r0 = (11.4 + 0.14 * Bz) * Pd ** (-1 / 6.6)
+    else:
+        if isinstance(Pd, float) | isinstance(Pd, int):
+            Pd = np.ones_like(Bz) * Pd
+        r0 = (11.4 + 0.13 * Bz) * Pd ** (-1 / 6.6)
+        r0[Bz < 0] = (11.4 + 0.14 * Bz[Bz < 0]) * Pd[Bz < 0] ** (-1 / 6.6)
+    a = (0.58 - 0.010 * Bz) * (1 + 0.010 * Pd)
+    r = r0 * (2. / (1 + np.cos(theta))) ** a
+    return coords.choice_coordinate_system(r, theta, phi, **kwargs)
 
 
 def mp_shue1998(theta, phi, **kwargs):
@@ -183,25 +230,16 @@ def mp_shue1998(theta, phi, **kwargs):
 
     '''
 
-    Pd = kwargs.get("pdyn", 2)
-    Bz = kwargs.get("Bz", 1)
+    Pd = kwargs.get("Pd", 2.056)
+    Bz = kwargs.get("Bz", -0.001)
 
     r0 = (10.22 + 1.29 * np.tanh(0.184 * (Bz + 8.14))) * Pd ** (-1. / 6.6)
     a = (0.58 - 0.007 * Bz) * (1 + 0.024 * np.log(Pd))
     r = r0 * (2. / (1 + np.cos(theta))) ** a
-
-    base = kwargs.get("base", "cartesian")
-    if base == "cartesian":
-        x = r * np.cos(theta)
-        y = r * np.sin(theta)
-        z = r * np.sin(theta)
-        return x, y, z
-    elif base == "cylindrical":
-        return r, theta
-    raise ValueError("unknown base '{}'".format(kwargs["base"]))
+    return coords.choice_coordinate_system(r, theta, phi, **kwargs)
 
 
-def MP_Lin2010(phi_in, th_in, Pd, Pm, Bz, tilt=0.):
+def mp_lin2010(theta, phi, **kwargs):
     ''' The Lin 2010 Magnetopause model. Returns the MP distance for a given
     azimuth (phi), zenith (th), solar wind dynamic and magnetic pressures (nPa)
     and Bz (in nT).
@@ -211,54 +249,37 @@ def MP_Lin2010(phi_in, th_in, Pd, Pm, Bz, tilt=0.):
     * Pm: Solar wind magnetic pressure in nPa
     * tilt: Dipole tilt
     '''
-    a = [12.544,
-         -0.194,
-         0.305,
-         0.0573,
-         2.178,
-         0.0571,
-         -0.999,
-         16.473,
-         0.00152,
-         0.382,
-         0.0431,
-         -0.00763,
-         -0.210,
-         0.0405,
-         -4.430,
-         -0.636,
-         -2.600,
-         0.832,
-         -5.328,
-         1.103,
-         -0.907,
-         1.450]
+    a = [12.544, -0.194, 0.305, 0.0573, 2.178, 0.0571, -0.999, 16.473, 0.00152, 0.382, 0.0431, -0.00763, -0.210, 0.0405,
+         -4.430, -0.636, -2.600, 0.832, -5.328, 1.103, -0.907, 1.450]
 
-    arr = type(np.array([]))
-
-    if (type(th_in) == arr):
-        th = th_in.copy()
+    if isinstance(theta, np.ndarray) | isinstance(theta, pd.Series):
+        t = np.array(theta).copy()
+        idx = np.where(t < 0)[0]
+        if isinstance(phi, np.ndarray) | isinstance(phi, pd.Series):
+            p = np.array(phi).copy()
+            p[idx] = p[idx] + np.pi
+        else:
+            p = phi * np.ones(t.shape)
+            p[idx] = p[idx] + np.pi
     else:
-        th = th_in
+        t = theta
+        p = phi + (t < 0) * np.pi
 
-    if (type(phi_in) == arr):
-        phi = phi_in.copy()
+    t = np.sign(t) * t
+
+    Pd = kwargs.get('Pd', 2.056)
+    Bx = kwargs.get('Bx', 0.032)
+    By = kwargs.get('By', -0.015)
+    Bz = kwargs.get('Bz', -0.001)
+    tilt = kwargs.get('tilt', 0.)
+
+    B_param = [('Bx' in kwargs), ('By' in kwargs), ('Bz' in kwargs)]
+    if all(B_param):
+        Pm = (Bx ** 2 + By ** 2 + Bz ** 2) * 1e-18 / (2 * cst.mu_0) * 1e9
+    elif not any(B_param):
+        Pm = 0.016
     else:
-        phi = phi_in
-
-    el = th_in < 0.
-    if (type(el) == arr):
-        if (el.any()):
-            th[el] = -th[el]
-
-            if (type(phi) == type(arr)):
-                phi[el] = phi[el] + np.pi
-            else:
-                phi = phi * np.ones(th.shape) + np.pi * el
-    else:
-        if (el):
-            th = -th
-            phi = phi + np.pi
+        raise ValueError('None or all Bx, By, Bz parameters must be set')
 
     P = Pd + Pm
 
@@ -275,8 +296,8 @@ def MP_Lin2010(phi_in, th_in, Pd, Pm, Bz, tilt=0.):
             quad(11, [1, 0]),
             a[13]]
 
-    f = np.cos(0.5 * th) + a[5] * np.sin(2 * th) * (1 - np.exp(-th))
-    s = beta[0] + beta[1] * np.sin(phi) + beta[2] * np.cos(phi) + beta[3] * np.cos(phi) ** 2
+    f = np.cos(0.5 * t) + a[5] * np.sin(2 * t) * (1 - np.exp(-t))
+    s = beta[0] + beta[1] * np.sin(p) + beta[2] * np.cos(p) + beta[3] * np.cos(p) ** 2
     f = f ** (s)
 
     c = {}
@@ -288,8 +309,8 @@ def MP_Lin2010(phi_in, th_in, Pd, Pm, Bz, tilt=0.):
         c[i] = a[14] * P ** a[15]
         d[i] = quad(16, [s, 1])
         TH[i] = quad(19, [s, 0])
-        PHI[i] = np.cos(th) * np.cos(TH[i])
-        PHI[i] = PHI[i] + np.sin(th) * np.sin(TH[i]) * np.cos(phi - (1 - s) * 0.5 * np.pi)
+        PHI[i] = np.cos(t) * np.cos(TH[i])
+        PHI[i] = PHI[i] + np.sin(t) * np.sin(TH[i]) * np.cos(p - (1 - s) * 0.5 * np.pi)
         PHI[i] = np.arccos(PHI[i])
         e[i] = a[21]
     r = f * r0
@@ -297,27 +318,32 @@ def MP_Lin2010(phi_in, th_in, Pd, Pm, Bz, tilt=0.):
     Q = c['n'] * np.exp(d['n'] * PHI['n'] ** e['n'])
     Q = Q + c['s'] * np.exp(d['s'] * PHI['s'] ** e['s'])
 
-    return r + Q
+    r = r + Q
+
+    return coords.choice_coordinate_system(r, theta, phi, **kwargs)
 
 
 def mp_liu2015(theta, phi, **kwargs):
     if isinstance(theta, np.ndarray) | isinstance(theta, pd.Series):
-        idx = np.where(theta < 0)[0]
+        t = np.array(theta).copy()
+        idx = np.where(t < 0)[0]
         if isinstance(phi, np.ndarray) | isinstance(phi, pd.Series):
-            phi[idx] = phi[idx] + np.pi
+            p = np.array(phi).copy()
+            p[idx] = p[idx] + np.pi
         else:
-            phi = phi * np.ones(theta.shape)
-            phi[idx] = phi[idx] + np.pi
+            p = phi * np.ones(t.shape)
+            p[idx] = p[idx] + np.pi
     else:
-        phi = phi + (theta < 0) * np.pi
+        t = theta
+        p = phi + (t < 0) * np.pi
 
-    theta = np.sign(theta) * theta
+    t = np.sign(t) * t
 
     Pd = kwargs.get('Pd', 2.056)
     Bx = kwargs.get('Bx', 0.032)
     By = kwargs.get('By', -0.015)
     Bz = kwargs.get('Bz', -0.001)
-    tilt = kwargs.get('tilt', 0)
+    tilt = kwargs.get('tilt', 0.)
     B_param = [('Bx' in kwargs), ('By' in kwargs), ('Bz' in kwargs)]
     if all(B_param):
         Pm = (Bx ** 2 + By ** 2 + Bz ** 2) * 1e-18 / (2 * cst.mu_0) * 1e9
@@ -334,7 +360,7 @@ def mp_liu2015(theta, phi, **kwargs):
 
     alpha_z = 0.06263 * np.tanh(0.0251 * tilt)
 
-    alpha_phi = (0.06354 + 0.07764 * np.tanh(0.07217 * (abs(Bz) + 4.851))) * (1 + 0.01182 * np.log(Pd))
+    alpha_p = (0.06354 + 0.07764 * np.tanh(0.07217 * (abs(Bz) + 4.851))) * (1 + 0.01182 * np.log(Pd))
 
     delta_alpha = 0.02582 * np.tanh(0.0667 * Bx) * np.sign(Bx)
 
@@ -351,35 +377,224 @@ def mp_liu2015(theta, phi, **kwargs):
         else:
             omega = np.sign(By) * np.pi / 2
 
-    alpha = alpha_0 + alpha_z * np.cos(phi) + (alpha_phi + delta_alpha * np.sign(np.cos(phi))) * np.cos(
-        2 * (phi - omega))
+    alpha = alpha_0 + alpha_z * np.cos(p) + (alpha_p + delta_alpha * np.sign(np.cos(p))) * np.cos(
+        2 * (p - omega))
 
     l_n = (0.822 + 0.2921 * np.tanh(0.08792 * (Bz + 10.12))) * (1 - 0.01278 * tilt)
     l_s = (0.822 + 0.2921 * np.tanh(0.08792 * (Bz + 10.12))) * (1 + 0.01278 * tilt)
     w = (0.2382 + 0.005806 * np.log(Pd)) * (1 + 0.0002335 * tilt ** 2)
 
-    C = np.exp(-abs(theta - l_n) / w) * (1 + np.sign(np.cos(phi))) + np.exp(-abs(theta - l_s) / w) * (
-        1 + np.sign(-np.cos(phi)))
+    C = np.exp(-abs(t - l_n) / w) * (1 + np.sign(np.cos(p))) + np.exp(-abs(t - l_s) / w) * (
+        1 + np.sign(-np.cos(p)))
 
-    r = (r0 * (2 / (1 + np.cos(theta))) ** alpha) * (1 - 0.1 * C * np.cos(phi) ** 2)
+    r = (r0 * (2 / (1 + np.cos(t))) ** alpha) * (1 - 0.1 * C * np.cos(p) ** 2)
 
-    base = kwargs.get('base', 'cartesian')
-    if base == "cartesian":
-        x = r * np.cos(theta)
-        y = r * np.sin(theta) * np.cos(phi)
-        z = r * np.sin(theta) * np.sin(phi)
-        return x, y, z
-    elif base == "spherical":
-        return r, theta, phi
-    raise ValueError("unknown base '{}'".format(kwargs["base"]))
+    return coords.choice_coordinate_system(r, theta, phi, **kwargs)
 
 
-_models = {"mp_shue1998": mp_shue1998,
-           "mp_formisano1979": mp_formisano1979,
-           "mp_liu2015": mp_liu2015,
-           "bs_formisano1979": bs_formisano1979,
-           "bs_jerab2005": bs_Jerab2005}
 
+def mp_jelinek2012(theta, phi, **kwargs):
+    lamb = 1.54
+    R = 12.82
+    epsilon = 5.26
+    Pd = kwargs.get('Pd', 2.056)
+
+    R0 = 2 * R * Pd ** (-1 / epsilon)
+    r = R0 / (np.cos(theta) + np.sqrt(np.cos(theta) ** 2 + np.sin(theta) * np.sin(theta) * lamb ** 2))
+    return coords.choice_coordinate_system(r, theta, phi, **kwargs)
+
+
+def bs_jelinek2012(theta, phi, **kwargs):
+    lamb = 1.17
+    R = 15.02
+    epsilon = 6.55
+    Pd = kwargs.get('Pd', 2.056)
+
+    R0 = 2 * R * Pd ** (-1 / epsilon)
+    r = R0 / (np.cos(theta) + np.sqrt(np.cos(theta) ** 2 + np.sin(theta) * np.sin(theta) * lamb ** 2))
+    return coords.choice_coordinate_system(r, theta, phi, **kwargs)
+
+def mp_nguyen2020(theta, phi, **kwargs):
+    def inv_cos(t):
+        return 2 / (1 + np.cos(t))
+
+    ## return an array of phi and theta in the right ranges of values
+    if isinstance(theta, np.ndarray) | isinstance(theta, pd.Series):
+        t = np.array(theta).copy()
+        idx = np.where(t < 0)[0]
+        if isinstance(phi, np.ndarray) | isinstance(phi, pd.Series):
+            p = np.array(phi).copy()
+            p[idx] = p[idx] + np.pi
+        else:
+            p = phi * np.ones(t.shape)
+            p[idx] = p[idx] + np.pi
+    else:
+        t = theta
+        p = phi + (t < 0) * np.pi
+
+    t = np.sign(t) * t
+
+    # coefficients
+    a = [10.61,
+         -0.150,
+         0.027,
+         0.207,
+         1.62,
+         0.558,
+         0.135,
+         0.0150,
+         -0.0839]
+
+    Pd = kwargs.get('Pd', 2.056)
+    Bx = kwargs.get('Bx', 0.032)
+    By = kwargs.get('By', -0.015)
+    Bz = kwargs.get('Bz', -0.001)
+    gamma = kwargs.get('tilt', 0.)
+
+    B_param = [('Bx' in kwargs), ('By' in kwargs), ('Bz' in kwargs)]
+    if all(B_param):
+        Pm = (Bx ** 2 + By ** 2 + Bz ** 2) * 1e-18 / (2 * cst.mu_0) * 1e9
+    elif not any(B_param):
+        Pm = 0.016
+    else:
+        raise ValueError('None or all Bx, By, Bz parameters must be set')
+
+    omega = np.sign(By) * np.arccos(Bz / np.sqrt(By ** 2 + Bz ** 2))
+    P = Pd + Pm
+    r0 = a[0] * (1 + a[2] * np.tanh(a[3] * Bz + a[4])) * P ** (a[1])
+
+    alpha0 = a[5]
+    alpha1 = a[6] * gamma
+    alpha2 = a[7] * np.cos(omega)
+    alpha3 = a[8] * np.cos(omega)
+
+    alpha = alpha0 + alpha1 * np.cos(p) + alpha2 * np.sin(p) ** 2 + alpha3 * np.cos(p) ** 2
+    r = r0 * inv_cos(t) ** alpha
+    return coords.choice_coordinate_system(r, theta, phi, **kwargs)
+
+
+def mp_shue1998_tangents(theta, phi, **kwargs):
+    Pd = kwargs.get("Pd", 2.056)
+    Bz = kwargs.get("Bz", -0.001)
+
+    r0 = (10.22 + 1.29 * np.tanh(0.184 * (Bz + 8.14))) * Pd ** (-1. / 6.6)
+    a = (0.58 - 0.007 * Bz) * (1 + 0.024 * np.log(Pd))
+    r = r0 * (2. / (1 + np.cos(theta))) ** a
+    drdt = r0 * a * (2 ** a) * np.sin(theta) / (1 + np.cos(theta)) ** (a + 1)
+    dxdt = drdt * np.cos(theta) - r * np.sin(theta)
+    dydt = drdt * np.sin(theta) * np.sin(phi) + r * np.cos(theta) * np.sin(phi)
+    dzdt = drdt * np.sin(theta) * np.cos(phi) + r * np.cos(theta) * np.cos(phi)
+
+    normt = mnorm(dxdt, dydt, dzdt)
+    normt[normt == 0] = 1
+
+    dxdp = 0
+    dydp = r * np.sin(theta) * np.cos(phi)
+    dzdp = -r * np.sin(theta) * np.sin(phi)
+
+    normp = mnorm(dxdp, dydp, dzdp)
+    normp[normp == 0] = 1
+
+    return [dxdt / normt, dydt / normt, dzdt / normt], [dxdp / normp, dydp / normp, dzdp / normp]
+
+
+def bs_jelinek2012_tangents(theta, phi, **kwargs):
+    lamb = 1.17
+    R = 15.02
+    epsilon = 6.55
+    Pd = kwargs.get('Pd', 2.056)
+
+    R0 = 2 * R * Pd ** (-1 / epsilon)
+    r = R0 / (np.cos(theta) + np.sqrt(np.cos(theta) ** 2 + (lamb * np.sin(theta)) ** 2))
+    test = R0 * np.sin(theta) * (
+            np.cos(theta) * (1 - lamb ** 2) / np.sqrt(np.cos(theta) ** 2 + (lamb * np.sin(theta)) ** 2)) / (
+                   np.cos(theta) + np.sqrt(np.cos(theta) ** 2 + (lamb * np.sin(theta)) ** 2)) ** 2
+
+    u0 = R0
+    v0 = np.cos(theta) + np.sqrt(np.cos(theta) ** 2 + (lamb * np.sin(theta)) ** 2)
+    v0p = -np.sin(theta) + (np.cos(theta) * (-np.sin(theta)) + lamb ** 2 * np.sin(theta) * np.cos(theta)) / np.sqrt(
+        np.cos(theta) ** 2 + (lamb * np.sin(theta)) ** 2)
+
+    drdt = -u0 * v0p / v0 ** 2
+
+    dxdt = drdt * np.cos(theta) - r * np.sin(theta)
+    dydt = drdt * np.sin(theta) * np.sin(phi) + r * np.cos(theta) * np.sin(phi)
+    dzdt = drdt * np.sin(theta) * np.cos(phi) + r * np.cos(theta) * np.cos(phi)
+
+    normt = mnorm(dxdt, dydt, dzdt)
+    normt[normt == 0] = 1
+
+    dxdp = 0
+    dydp = r * np.sin(theta) * np.cos(phi)
+    dzdp = -r * np.sin(theta) * np.sin(phi)
+
+    normp = mnorm(dxdp, dydp, dzdp)
+    normp[normp == 0] = 1
+
+    return [dxdt / normt, dydt / normt, dzdt / normt], [dxdp / normp, dydp / normp, dzdp / normp]
+
+
+def mp_shue1998_normal(theta, phi, **kwargs):
+    [dxdt, dydt, dzdt], [dxdp, dydp, dzdp] = mp_shue1998_tangents(theta, phi, **kwargs)
+
+    pvx = dzdt * dydp - dydt * dzdp
+    pvy = dxdt * dzdp - dzdt * dxdp
+    pvz = dydt * dxdp - dxdt * dydp
+
+    norm = mnorm(pvx, pvy, pvz)
+
+    pvx[norm == 0] = 1
+    norm[norm == 0] = 1
+
+    return (pvx / norm, pvy / norm, pvz / norm)
+
+
+def bs_jelinek2012_normal(theta, phi, **kwargs):
+    [dxdt, dydt, dzdt], [dxdp, dydp, dzdp] = bs_jelinek2012_tangents(theta, phi, **kwargs)
+    pvx = dzdt * dydp - dydt * dzdp
+    pvy = dxdt * dzdp - dzdt * dxdp
+    pvz = dydt * dxdp - dxdt * dydp
+
+    norm = mnorm(pvx, pvy, pvz)
+
+    pvx[norm == 0] = 1
+    norm[norm == 0] = 1
+
+    return (pvx / norm, pvy / norm, pvz / norm)
+
+
+_models = { "mp_shue1998": mp_shue1998,
+            "mp_shue1997": mp_shue1997,
+            "mp_formisano1979": mp_formisano1979,
+            "mp_liu2015" : mp_liu2015,
+            "mp_jelinek2012" : mp_jelinek2012,
+            "mp_lin2010" : mp_lin2010,
+            "mp_nguyen2020" : mp_nguyen2020,
+            "bs_formisano1979": bs_formisano1979,
+            "bs_jerab2005": bs_Jerab2005,
+            "bs_jelinek2012": bs_jelinek2012}
+_tangents = {"mp_shue1998" : mp_shue1998_tangents,
+             "bs_jelinek2012" : bs_jelinek2012_tangents,
+            "mp_shue1997": None,
+             "mp_formisano1979": None,
+             "mp_liu2015": None,
+             "mp_jelinek2012": None,
+             "mp_lin2010": None,
+             "mp_nguyen2020": None,
+             "bs_formisano1979": None,
+             "bs_jerab2005": None}
+
+_normal = {"mp_shue1998" : mp_shue1998_normal,
+             "bs_jelinek2012" : bs_jelinek2012_normal,
+            "mp_shue1997": None,
+           "mp_formisano1979": None,
+           "mp_liu2015": None,
+           "mp_jelinek2012": None,
+           "mp_lin2010": None,
+           "mp_nguyen2020": None,
+           "bs_formisano1979": None,
+           "bs_jerab2005": None
+           }
 
 def available(model):
     if model == "magnetopause":
@@ -389,23 +604,24 @@ def available(model):
     raise ValueError("invalid model type")
 
 
+
+
 def _interest_points(model, **kwargs):
     dup = kwargs.copy()
-    dup["base"] = "cartesian"
+    dup["coord_sys"] = "cartesian"
     x = model(0, 0, **dup)[0]
-    y = model(np.pi / 2, 0, **dup)[1]
+    y = ( abs(model(np.pi / 2, np.pi/2, **dup)[1]) + abs(model(np.pi / 2, -np.pi/2, **dup)[1]))/2
     xf = x - y ** 2 / (4 * x)
     return x, y, xf
 
-
-def _parabolic_approx(theta, phi, x, xf, **kwargs):
-    theta, phi = _checking_angles(theta, phi)
+def _parabolic_approx(theta, phi, x, xf, **kwargs): # x= nose boundary , xf= focal point
     K = x - xf
     a = np.sin(theta) ** 2
     b = 4 * K * np.cos(theta)
     c = -4 * K * x
-    r = resolve_poly2(a, b, c, 0)
-    return coords.base_choice(kwargs.get("base", "cartesian"), r, theta, phi)
+    r = resolve_poly2_real_roots(a, b, c)[0]
+    return coords.choice_coordinate_system(r, theta, phi, **kwargs)
+
 
 
 def check_parabconfoc(func):
@@ -423,7 +639,7 @@ class Magnetosheath:
     def __init__(self, **kwargs):
 
         kwargs["magnetopause"] = kwargs.get("magnetopause", "mp_shue1998")
-        kwargs["bow_shock"] = kwargs.get("bow_shock", "bs_jerab2005")
+        kwargs["bow_shock"] = kwargs.get("bow_shock", "bs_jelinek2012")
 
         if not kwargs["magnetopause"].startswith("mp_") \
             or not kwargs["bow_shock"].startswith("bs_"):
@@ -433,20 +649,45 @@ class Magnetosheath:
         self._bow_shock = _models[kwargs["bow_shock"]]
         self.model_magnetopause = kwargs["magnetopause"]
         self.model_bow_shock = kwargs["bow_shock"]
+        self._tangents_magnetopause = _tangents[kwargs["magnetopause"]]
+        self._normal_magnetopause = _normal[kwargs["magnetopause"]]
+        self._tangents_bow_shock = _tangents[kwargs["bow_shock"]]
+        self._normal_bow_shock = _normal[kwargs["bow_shock"]]
+
+
 
     @check_parabconfoc
     def magnetopause(self, theta, phi, **kwargs):
         if kwargs["parabolic"]:
             return self._parabolize(theta, phi, **kwargs)[0]
         else:
-            return self._magnetopause(theta, phi, **kwargs)
+            if kwargs.get('normal', False) or kwargs.get('tangents', False) :
+                ret_vectors = []
+                ret_vectors.append(self._magnetopause(theta, phi, **kwargs))
+                if kwargs.get('normal', False):
+                    ret_vectors.append(self._normal_magnetopause(listify(theta), listify(phi), **kwargs))
+                if kwargs.get('tangents', False):
+                    ret_vectors.append(self._tangents_magnetopause(listify(theta), listify(phi), **kwargs))
+                return ret_vectors
+            else :
+                return self._magnetopause(theta, phi, **kwargs)
 
     @check_parabconfoc
     def bow_shock(self, theta, phi, **kwargs):
         if kwargs["parabolic"]:
             return self._parabolize(theta, phi, **kwargs)[1]
         else:
-            return self._bow_shock(theta, phi, **kwargs)
+            if kwargs.get('normal', False) or kwargs.get('tangents', False):
+                ret_vectors = []
+                ret_vectors.append(self._bow_shock(theta, phi, **kwargs))
+                if kwargs.get('normal',False):
+                    ret_vectors.append(self._normal_bow_shock(listify(theta), listify(phi), **kwargs))
+                if kwargs.get('tangents',False):
+                    ret_vectors.append(self._tangents_bow_shock(listify(theta), listify(phi), **kwargs))
+                return ret_vectors
+            else :
+                return self._bow_shock(theta, phi, **kwargs)
+
 
     @check_parabconfoc
     def boundaries(self, theta, phi, **kwargs):
@@ -455,6 +696,20 @@ class Magnetosheath:
         else:
             return self._magnetopause(theta, phi, **kwargs), \
                    self._bow_shock(theta, phi, **kwargs)
+
+    def tangents_magnetopause(self, theta, phi, **kwargs):
+        return self._tangents_magnetopause(listify(theta), listify(phi), **kwargs)
+
+    def normal_magnetopause(self, theta, phi, **kwargs):
+        return self._normal_magnetopause(listify(theta), listify(phi), **kwargs)
+
+
+    def tangents_bow_shock(self, theta, phi,**kwargs):
+        return self._tangents_bow_shock(listify(theta), listify(phi), **kwargs)
+
+    def normal_bow_shock(self, theta, phi,**kwargs):
+        return self._normal_bow_shock(listify(theta), listify(phi), **kwargs)
+
 
     def _parabolize(self, theta, phi, **kwargs):
         xmp, y, xfmp = _interest_points(self._magnetopause, **kwargs)

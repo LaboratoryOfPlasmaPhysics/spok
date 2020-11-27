@@ -15,10 +15,10 @@ class TestMagnetosheath(unittest.TestCase):
 
     def setUp(self):
         """Set up test fixtures, if any."""
-        self.typical_msh = Magnetosheath(magnetopause="mp_formisano1979", bow_shock="bs_formisano1979")
-        theta = np.arange(0, np.pi/2, 0.1*np.pi)
-        self.typical_mp_sph, self.typical_bs_sph  = self.typical_msh.boundaries(theta, 0, base = "spherical")
-        self.typical_mp_cart, self.typical_bs_cart = self.typical_msh.boundaries(theta, 0, base = "cartesian")
+        self.typical_msh = Magnetosheath(magnetopause="mp_shue1998", bow_shock="bs_jelinek2012")
+        theta = np.arange(0, np.pi/2, 0.01*np.pi)
+        self.typical_mp_sph, self.typical_bs_sph  = self.typical_msh.boundaries(theta, 0, coord_sys = "spherical")
+        self.typical_mp_cart, self.typical_bs_cart = self.typical_msh.boundaries(theta, 0, coord_sys = "cartesian")
 
     def tearDown(self):
         """Tear down test fixtures, if any."""
