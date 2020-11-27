@@ -137,7 +137,7 @@ def bs_Jerab2005(theta, phi, **kwargs):
         a34 = -0.6
         a44 = -618
 
-        a = a11 * np.cos(theta) ** 2 + np.sin(theta) ** 2 * (a22 * np.cos(phi) ** 2 + a33 * np.sin(phi) ** 2)
+        a = a11 * np.cos(theta) ** 2 + np.sin(theta) ** 2 * (a22 * np.cos(phi) ** 2 + a33 * np.sin(phi) ** 2) + a12 * np.cos(theta) * np.sin(theta) * np.cos(phi)
         b = a14 * np.cos(theta) + np.sin(theta) * (a24 * np.cos(phi) + a34 * np.sin(phi))
         c = a44
 
