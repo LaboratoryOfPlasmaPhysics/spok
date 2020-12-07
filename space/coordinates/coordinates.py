@@ -66,9 +66,9 @@ def to_swi(omni_data, msh_data, pos_msh):
     pos = pos_msh.copy()
 
 
-    o_data['Vx'] = X_swi[:,0]*omni_data['Vx']+X_swi[:,1]*omni_data['Vy']+X_swi[:,2]*omni_data['Vz']
-    o_data['Vy'] = Y_swi[:,0]*omni_data['Vx']+Y_swi[:,1]*omni_data['Vy']+Y_swi[:,2]*omni_data['Vz']
-    o_data['Vz'] = Z_swi[:,0]*omni_data['Vx']+Z_swi[:,1]*omni_data['Vy']+Z_swi[:,2]*omni_data['Vz']
+    o_data['Vx'] = X_swi[:,0]*omni_data['Vx']+X_swi[:,1]*(omni_data['Vy']+29.8)+X_swi[:,2]*omni_data['Vz']
+    o_data['Vy'] = Y_swi[:,0]*omni_data['Vx']+Y_swi[:,1]*(omni_data['Vy']+29.8)+Y_swi[:,2]*omni_data['Vz']
+    o_data['Vz'] = Z_swi[:,0]*omni_data['Vx']+Z_swi[:,1]*(omni_data['Vy']+29.8)+Z_swi[:,2]*omni_data['Vz']
 
     o_data['Bx'] = np.sign(omni_data['COA'])*(X_swi[:,0]*omni_data['Bx']+X_swi[:,1]*omni_data['By']+X_swi[:,2]*omni_data['Bz'])
     o_data['By'] = np.sign(omni_data['COA'])*(Y_swi[:,0]*omni_data['Bx']+Y_swi[:,1]*omni_data['By']+Y_swi[:,2]*omni_data['Bz'])
