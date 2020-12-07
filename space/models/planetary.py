@@ -311,19 +311,21 @@ def MP_Lin2010(phi_in ,th_in, Pd, Pm, Bz, tilt=0.):
     return r+Q
 
 
-
 def mp_liu2015(theta, phi, **kwargs):
     if isinstance(theta, np.ndarray) | isinstance(theta, pd.Series):
-        idx = np.where(theta < 0)[0]
+        t = np.array(theta).copy()
+        idx = np.where(t < 0)[0]
         if isinstance(phi, np.ndarray) | isinstance(phi, pd.Series):
-            phi[idx] = phi[idx] + np.pi
+            p = np.array(phi).copy()
+            p[idx] = p[idx] + np.pi
         else:
-            phi = phi * np.ones(theta.shape)
-            phi[idx] = phi[idx] + np.pi
+            p = phi * np.ones(t.shape)
+            p[idx] = p[idx] + np.pi
     else:
-        phi = phi + (theta < 0) * np.pi
+        t = theta
+        p = phi + (t < 0) * np.pi
 
-    theta = np.sign(theta) * theta
+    t = np.sign(t) * t
 
     Pd = kwargs.get('Pd', 2.056)
     Bx = kwargs.get('Bx', 0.032)
@@ -346,7 +348,7 @@ def mp_liu2015(theta, phi, **kwargs):
 
     alpha_z = 0.06263 * np.tanh(0.0251 * tilt)
 
-    alpha_phi = (0.06354 + 0.07764 * np.tanh(0.07217 * (abs(Bz) + 4.851))) * (1 + 0.01182 * np.log(Pd))
+    alpha_p = (0.06354 + 0.07764 * np.tanh(0.07217 * (abs(Bz) + 4.851))) * (1 + 0.01182 * np.log(Pd))
 
     delta_alpha = 0.02582 * np.tanh(0.0667 * Bx) * np.sign(Bx)
 
@@ -363,29 +365,27 @@ def mp_liu2015(theta, phi, **kwargs):
         else:
             omega = np.sign(By) * np.pi / 2
 
-    alpha = alpha_0 + alpha_z * np.cos(phi) + (alpha_phi + delta_alpha * np.sign(np.cos(phi))) * np.cos(
-        2 * (phi - omega))
+    alpha = alpha_0 + alpha_z * np.cos(p) + (alpha_p + delta_alpha * np.sign(np.cos(p))) * np.cos(
+        2 * (p - omega))
 
     l_n = (0.822 + 0.2921 * np.tanh(0.08792 * (Bz + 10.12))) * (1 - 0.01278 * tilt)
     l_s = (0.822 + 0.2921 * np.tanh(0.08792 * (Bz + 10.12))) * (1 + 0.01278 * tilt)
     w = (0.2382 + 0.005806 * np.log(Pd)) * (1 + 0.0002335 * tilt ** 2)
 
+    C = np.exp(-abs(t - l_n) / w) * (1 + np.sign(np.cos(p))) + np.exp(-abs(t - l_s) / w) * (
+        1 + np.sign(-np.cos(p)))
 
-    C = np.exp(-abs(theta - l_n) / w) * (1 + np.sign(np.cos(phi))) + np.exp(-abs(theta - l_s) / w) * (
-        1 + np.sign(-np.cos(phi)))
-
-    r = (r0 * (2 / (1 + np.cos(theta))) ** alpha) * (1 - 0.1 * C * np.cos(phi) ** 2)
+    r = (r0 * (2 / (1 + np.cos(t))) ** alpha) * (1 - 0.1 * C * np.cos(p) ** 2)
 
     base = kwargs.get('base', 'cartesian')
     if base == "cartesian":
-        x = r * np.cos(theta)
-        y = r * np.sin(theta) * np.cos(phi)
-        z = r * np.sin(theta) * np.sin(phi)
+        x = r * np.cos(t)
+        y = r * np.sin(t) * np.cos(p)
+        z = r * np.sin(t) * np.sin(p)
         return x, y, z
     elif base == "spherical":
-        return r, theta, phi
+        return r, t, p
     raise ValueError("unknown base '{}'".format(kwargs["base"]))
-
 
 
 
