@@ -3,32 +3,30 @@ import pandas as pd
 from scipy import constants as cst
 
 import sys
+
 sys.path.append('.')
-from .. import utils
 from ..coordinates import coordinates as coords
 from ..smath import resolve_poly2
 
 
-
 def _checking_angles(theta, phi):
-
     if isinstance(theta, np.ndarray) and isinstance(theta, np.ndarray) and len(theta.shape) > 1 and len(phi.shape) > 1:
         return np.meshgrid(theta, phi)
     return theta, phi
 
 
 def _formisano1979(theta, phi, **kwargs):
-    a11,a22,a33,a12,a13,a23,a14,a24,a34,a44 = kwargs["coefs"]
+    a11, a22, a33, a12, a13, a23, a14, a24, a34, a44 = kwargs["coefs"]
     ct = np.cos(theta)
     st = np.sin(theta)
     cp = np.cos(phi)
     sp = np.sin(phi)
-    A = a11 * ct**2 + st**2 * (a22* cp**2 + a33 * sp**2) \
-        + ct * st * (a12 * cp + a13 * sp) + a23 * st**2 * cp * sp
-    B = a14*ct + st*(a24*cp + a34*sp)
+    A = a11 * ct ** 2 + st ** 2 * (a22 * cp ** 2 + a33 * sp ** 2) \
+        + ct * st * (a12 * cp + a13 * sp) + a23 * st ** 2 * cp * sp
+    B = a14 * ct + st * (a24 * cp + a34 * sp)
     C = a44
-    D = B**2 - 4*A*C
-    return (-B + np.sqrt(D))/(2*A)
+    D = B ** 2 - 4 * A * C
+    return (-B + np.sqrt(D)) / (2 * A)
 
 
 def formisano1979(theta, phi, **kwargs):
@@ -52,15 +50,15 @@ def formisano1979(theta, phi, **kwargs):
     '''
 
     if kwargs["boundary"] == "magnetopause":
-        coefs = [0.65,1,1.16,0.03,-0.28,-0.11,21.41,0.46,-0.36,-221]
+        coefs = [0.65, 1, 1.16, 0.03, -0.28, -0.11, 21.41, 0.46, -0.36, -221]
     elif kwargs["boundary"] == "bow_shock":
         coefs = [0.52, 1, 1.05, 0.13, -0.16, -0.08, 47.53, -0.42, 0.67, -613]
     else:
         raise ValueError("boundary: {} not allowed".format(kwargs["boundary"]))
 
     theta, phi = _checking_angles(theta, phi)
-    r          =  _formisano1979(theta, phi, coefs = coefs)
-    base       = kwargs.get("base", "cartesian")
+    r = _formisano1979(theta, phi, coefs=coefs)
+    base = kwargs.get("base", "cartesian")
     if base == "cartesian":
         return coords.spherical_to_cartesian(r, theta, phi)
     elif base == "spherical":
@@ -68,18 +66,15 @@ def formisano1979(theta, phi, **kwargs):
     raise ValueError("unknown base '{}'".format(kwargs["base"]))
 
 
-
 def mp_formisano1979(theta, phi, **kwargs):
     return formisano1979(theta, phi, boundary="magnetopause", **kwargs)
+
 
 def bs_formisano1979(theta, phi, **kwargs):
     return formisano1979(theta, phi, boundary="bow_shock", **kwargs)
 
 
-
-
 def Fairfield1971(x, args):
-
     '''
     Fairfield 1971 : Magnetopause and Bow shock models. Give positions of the boudaries in plans (XY) with Z=0 and (XZ) with Y=0.
     function's arguments :
@@ -93,21 +88,20 @@ def Fairfield1971(x, args):
      return : DataFrame (Pandas) with the position (X,Y,Z) in Re of the wanted boudary to plot (XY) and (XZ) plans.
     '''
 
-
-    A,B,C,D,E = args[0],args[1],args[2],args[3],args[4]
+    A, B, C, D, E = args[0], args[1], args[2], args[3], args[4]
 
     a = 1
-    b = A*x + C
-    c = B*x**2 + D*x + E
+    b = A * x + C
+    c = B * x ** 2 + D * x + E
 
-    delta = b**2-4*a*c
+    delta = b ** 2 - 4 * a * c
 
-    ym = (-b - np.sqrt(delta))/(2*a)
-    yp = (-b + np.sqrt(delta))/(2*a)
+    ym = (-b - np.sqrt(delta)) / (2 * a)
+    yp = (-b + np.sqrt(delta)) / (2 * a)
 
-    pos=pd.DataFrame({'X' : np.concatenate([x, x[::-1]]),
-                      'Y' : np.concatenate([yp, ym[::-1]]),
-                      'Z' : np.concatenate([yp, ym[::-1]]),})
+    pos = pd.DataFrame({'X': np.concatenate([x, x[::-1]]),
+                        'Y': np.concatenate([yp, ym[::-1]]),
+                        'Z': np.concatenate([yp, ym[::-1]]), })
 
     return pos.dropna()
 
@@ -156,19 +150,16 @@ def bs_Jerab2005(theta, phi, **kwargs):
     D = 0.937 * (0.846 + 0.042 * B)
     R0 = make_Rav(0, 0)
 
-
-
     Rav = make_Rav(theta, phi)
     K = ((gamma - 1) * Ma ** 2 + 2) / ((gamma + 1) * (Ma ** 2 - 1))
     r = (Rav / R0) * (C / (Np * V ** 2) ** (1 / 6)) * (1 + D * K)
-
 
     base = kwargs.get('base', 'cartesian')
 
     if base == "cartesian":
         x = r * np.cos(theta)
-        y = r * np.sin(theta)*np.cos(phi)
-        z = r * np.sin(theta)*np.sin(phi)
+        y = r * np.sin(theta) * np.cos(phi)
+        z = r * np.sin(theta) * np.sin(phi)
         return x, y, z
     elif base == "spherical":
         return r, theta, phi
@@ -195,10 +186,9 @@ def mp_shue1998(theta, phi, **kwargs):
     Pd = kwargs.get("pdyn", 2)
     Bz = kwargs.get("Bz", 1)
 
-    r0 = (10.22 + 1.29 * np.tanh(0.184 * (Bz + 8.14))) * Pd**(-1./6.6)
-    a = (0.58-0.007*Bz)*(1+0.024*np.log(Pd))
-    r = r0*(2./(1+np.cos(theta)))**a
-
+    r0 = (10.22 + 1.29 * np.tanh(0.184 * (Bz + 8.14))) * Pd ** (-1. / 6.6)
+    a = (0.58 - 0.007 * Bz) * (1 + 0.024 * np.log(Pd))
+    r = r0 * (2. / (1 + np.cos(theta))) ** a
 
     base = kwargs.get("base", "cartesian")
     if base == "cartesian":
@@ -211,8 +201,7 @@ def mp_shue1998(theta, phi, **kwargs):
     raise ValueError("unknown base '{}'".format(kwargs["base"]))
 
 
-
-def MP_Lin2010(phi_in ,th_in, Pd, Pm, Bz, tilt=0.):
+def MP_Lin2010(phi_in, th_in, Pd, Pm, Bz, tilt=0.):
     ''' The Lin 2010 Magnetopause model. Returns the MP distance for a given
     azimuth (phi), zenith (th), solar wind dynamic and magnetic pressures (nPa)
     and Bz (in nT).
@@ -247,48 +236,48 @@ def MP_Lin2010(phi_in ,th_in, Pd, Pm, Bz, tilt=0.):
 
     arr = type(np.array([]))
 
-    if(type(th_in) == arr):
+    if (type(th_in) == arr):
         th = th_in.copy()
     else:
         th = th_in
 
-    if(type(phi_in) == arr):
+    if (type(phi_in) == arr):
         phi = phi_in.copy()
     else:
         phi = phi_in
 
     el = th_in < 0.
-    if(type(el) == arr):
-        if(el.any()):
+    if (type(el) == arr):
+        if (el.any()):
             th[el] = -th[el]
 
-            if(type(phi) == type(arr)):
-                phi[el] = phi[el]+np.pi
+            if (type(phi) == type(arr)):
+                phi[el] = phi[el] + np.pi
             else:
-                phi = phi*np.ones(th.shape)+np.pi*el
+                phi = phi * np.ones(th.shape) + np.pi * el
     else:
-        if(el):
+        if (el):
             th = -th
-            phi = phi+np.pi
+            phi = phi + np.pi
 
-    P = Pd+Pm
+    P = Pd + Pm
 
     def exp2(i):
-        return a[i]*(np.exp(a[i+1]*Bz)-1)/(np.exp(a[i+2]*Bz)+1)
+        return a[i] * (np.exp(a[i + 1] * Bz) - 1) / (np.exp(a[i + 2] * Bz) + 1)
 
     def quad(i, s):
-        return a[i]+s[0]*a[i+1]*tilt+s[1]*a[i+2]*tilt**2
+        return a[i] + s[0] * a[i + 1] * tilt + s[1] * a[i + 2] * tilt ** 2
 
-    r0 = a[0]*P**a[1]*(1+exp2(2))
+    r0 = a[0] * P ** a[1] * (1 + exp2(2))
 
     beta = [a[6] + exp2(7),
             a[10],
             quad(11, [1, 0]),
             a[13]]
 
-    f = np.cos(0.5*th)+a[5]*np.sin(2*th)*(1-np.exp(-th))
-    s = beta[0]+beta[1]*np.sin(phi)+beta[2]*np.cos(phi)+beta[3]*np.cos(phi)**2
-    f = f**(s)
+    f = np.cos(0.5 * th) + a[5] * np.sin(2 * th) * (1 - np.exp(-th))
+    s = beta[0] + beta[1] * np.sin(phi) + beta[2] * np.cos(phi) + beta[3] * np.cos(phi) ** 2
+    f = f ** (s)
 
     c = {}
     d = {}
@@ -296,19 +285,20 @@ def MP_Lin2010(phi_in ,th_in, Pd, Pm, Bz, tilt=0.):
     PHI = {}
     e = {}
     for i, s in zip(['n', 's'], [1, -1]):
-        c[i] = a[14]*P**a[15]
+        c[i] = a[14] * P ** a[15]
         d[i] = quad(16, [s, 1])
         TH[i] = quad(19, [s, 0])
-        PHI[i] = np.cos(th)*np.cos(TH[i])
-        PHI[i] = PHI[i] + np.sin(th)*np.sin(TH[i])*np.cos(phi-(1-s)*0.5*np.pi)
+        PHI[i] = np.cos(th) * np.cos(TH[i])
+        PHI[i] = PHI[i] + np.sin(th) * np.sin(TH[i]) * np.cos(phi - (1 - s) * 0.5 * np.pi)
         PHI[i] = np.arccos(PHI[i])
         e[i] = a[21]
-    r = f*r0
+    r = f * r0
 
-    Q = c['n']*np.exp(d['n']*PHI['n']**e['n'])
-    Q = Q + c['s']*np.exp(d['s']*PHI['s']**e['s'])
+    Q = c['n'] * np.exp(d['n'] * PHI['n'] ** e['n'])
+    Q = Q + c['s'] * np.exp(d['s'] * PHI['s'] ** e['s'])
 
-    return r+Q
+    return r + Q
+
 
 def mp_liu2015(theta, phi, **kwargs):
     if isinstance(theta, np.ndarray) | isinstance(theta, pd.Series):
@@ -384,11 +374,9 @@ def mp_liu2015(theta, phi, **kwargs):
     raise ValueError("unknown base '{}'".format(kwargs["base"]))
 
 
-
-
 _models = {"mp_shue1998": mp_shue1998,
            "mp_formisano1979": mp_formisano1979,
-           "mp_liu2015" : mp_liu2015,
+           "mp_liu2015": mp_liu2015,
            "bs_formisano1979": bs_formisano1979,
            "bs_jerab2005": bs_Jerab2005}
 
@@ -417,8 +405,7 @@ def _parabolic_approx(theta, phi, x, xf, **kwargs):
     b = 4 * K * np.cos(theta)
     c = -4 * K * x
     r = resolve_poly2(a, b, c, 0)
-    return coords.BaseChoice(kwargs.get("base", "cartesian"), r, theta, phi)
-
+    return coords.base_choice(kwargs.get("base", "cartesian"), r, theta, phi)
 
 
 def check_parabconfoc(func):
@@ -428,6 +415,7 @@ def check_parabconfoc(func):
         if kwargs["parabolic"] is False and kwargs["confocal"] is True:
             raise ValueError("cannot be confocal if not parabolic")
         return func(self, theta, phi, **kwargs)
+
     return wrapper
 
 
@@ -453,7 +441,6 @@ class Magnetosheath:
         else:
             return self._magnetopause(theta, phi, **kwargs)
 
-
     @check_parabconfoc
     def bow_shock(self, theta, phi, **kwargs):
         if kwargs["parabolic"]:
@@ -466,9 +453,8 @@ class Magnetosheath:
         if kwargs["parabolic"]:
             return self._parabolize(theta, phi, **kwargs)
         else:
-            return self._magnetopause(theta, phi, **kwargs),\
+            return self._magnetopause(theta, phi, **kwargs), \
                    self._bow_shock(theta, phi, **kwargs)
-
 
     def _parabolize(self, theta, phi, **kwargs):
         xmp, y, xfmp = _interest_points(self._magnetopause, **kwargs)

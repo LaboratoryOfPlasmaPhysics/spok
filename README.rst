@@ -13,6 +13,9 @@ space
         :target: https://space.readthedocs.io/en/latest/?badge=latest
         :alt: Documentation Status
 
+.. image:: https://codecov.io/gh/LaboratoryOfPlasmaPhysics/space/branch/main/graph/badge.svg?branch=main
+        :target: https://codecov.io/gh/LaboratoryOfPlasmaPhysics/space/branch/main
+        :alt: Coverage Status
 
 
 
