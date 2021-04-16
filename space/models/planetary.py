@@ -213,6 +213,98 @@ def mp_shue1997(theta, phi, **kwargs):
     return coords.choice_coordinate_system(r, theta, phi, **kwargs)
 
 
+
+def mp_shue1998_tangents(theta, phi, **kwargs):
+    Pd = kwargs.get("Pd", 2.056)
+    Bz = kwargs.get("Bz", -0.001)
+
+    r0 = (10.22 + 1.29 * np.tanh(0.184 * (Bz + 8.14))) * Pd ** (-1. / 6.6)
+    a = (0.58 - 0.007 * Bz) * (1 + 0.024 * np.log(Pd))
+    r = r0 * (2. / (1 + np.cos(theta))) ** a
+    drdt = r0 * a * (2 ** a) * np.sin(theta) / (1 + np.cos(theta)) ** (a + 1)
+    dxdt = drdt * np.cos(theta) - r * np.sin(theta)
+    dydt = drdt * np.sin(theta) * np.sin(phi) + r * np.cos(theta) * np.sin(phi)
+    dzdt = drdt * np.sin(theta) * np.cos(phi) + r * np.cos(theta) * np.cos(phi)
+
+    normt = mnorm(dxdt, dydt, dzdt)
+    normt[normt == 0] = 1
+
+    dxdp = 0
+    dydp = r * np.sin(theta) * np.cos(phi)
+    dzdp = -r * np.sin(theta) * np.sin(phi)
+
+    normp = mnorm(dxdp, dydp, dzdp)
+    normp[normp == 0] = 1
+
+    return [dxdt / normt, dydt / normt, dzdt / normt], [dxdp / normp, dydp / normp, dzdp / normp]
+
+
+def bs_jelinek2012_tangents(theta, phi, **kwargs):
+    lamb = 1.17
+    R = 15.02
+    epsilon = 6.55
+    Pd = kwargs.get('Pd', 2.056)
+
+    R0 = 2 * R * Pd ** (-1 / epsilon)
+    r = R0 / (np.cos(theta) + np.sqrt(np.cos(theta) ** 2 + (lamb * np.sin(theta)) ** 2))
+    test = R0 * np.sin(theta) * (
+            np.cos(theta) * (1 - lamb ** 2) / np.sqrt(np.cos(theta) ** 2 + (lamb * np.sin(theta)) ** 2)) / (
+                   np.cos(theta) + np.sqrt(np.cos(theta) ** 2 + (lamb * np.sin(theta)) ** 2)) ** 2
+
+    u0 = R0
+    v0 = np.cos(theta) + np.sqrt(np.cos(theta) ** 2 + (lamb * np.sin(theta)) ** 2)
+    v0p = -np.sin(theta) + (np.cos(theta) * (-np.sin(theta)) + lamb ** 2 * np.sin(theta) * np.cos(theta)) / np.sqrt(
+        np.cos(theta) ** 2 + (lamb * np.sin(theta)) ** 2)
+
+    drdt = -u0 * v0p / v0 ** 2
+
+    dxdt = drdt * np.cos(theta) - r * np.sin(theta)
+    dydt = drdt * np.sin(theta) * np.sin(phi) + r * np.cos(theta) * np.sin(phi)
+    dzdt = drdt * np.sin(theta) * np.cos(phi) + r * np.cos(theta) * np.cos(phi)
+
+    normt = mnorm(dxdt, dydt, dzdt)
+    normt[normt == 0] = 1
+
+    dxdp = 0
+    dydp = r * np.sin(theta) * np.cos(phi)
+    dzdp = -r * np.sin(theta) * np.sin(phi)
+
+    normp = mnorm(dxdp, dydp, dzdp)
+    normp[normp == 0] = 1
+
+    return [dxdt / normt, dydt / normt, dzdt / normt], [dxdp / normp, dydp / normp, dzdp / normp]
+
+
+def mp_shue1998_normal(theta, phi, **kwargs):
+    [dxdt, dydt, dzdt], [dxdp, dydp, dzdp] = mp_shue1998_tangents(theta, phi, **kwargs)
+
+    pvx = dzdt * dydp - dydt * dzdp
+    pvy = dxdt * dzdp - dzdt * dxdp
+    pvz = dydt * dxdp - dxdt * dydp
+
+    norm = mnorm(pvx, pvy, pvz)
+
+    pvx[norm == 0] = 1
+    norm[norm == 0] = 1
+
+    return (pvx / norm, pvy / norm, pvz / norm)
+
+
+def bs_jelinek2012_normal(theta, phi, **kwargs):
+    [dxdt, dydt, dzdt], [dxdp, dydp, dzdp] = bs_jelinek2012_tangents(theta, phi, **kwargs)
+    pvx = dzdt * dydp - dydt * dzdp
+    pvy = dxdt * dzdp - dzdt * dxdp
+    pvz = dydt * dxdp - dxdt * dydp
+
+    norm = mnorm(pvx, pvy, pvz)
+
+    pvx[norm == 0] = 1
+    norm[norm == 0] = 1
+
+    return (pvx / norm, pvy / norm, pvz / norm)
+
+
+
 def mp_shue1998(theta, phi, **kwargs):
     '''
     Shue 1998 Magnetopause model.
@@ -236,7 +328,14 @@ def mp_shue1998(theta, phi, **kwargs):
     r0 = (10.22 + 1.29 * np.tanh(0.184 * (Bz + 8.14))) * Pd ** (-1. / 6.6)
     a = (0.58 - 0.007 * Bz) * (1 + 0.024 * np.log(Pd))
     r = r0 * (2. / (1 + np.cos(theta))) ** a
-    return coords.choice_coordinate_system(r, theta, phi, **kwargs)
+    rtp = coords.choice_coordinate_system(r, theta, phi, **kwargs)
+
+    vectors=[rtp]
+    if kwargs.get("normal", False):
+        vectors.append(mp_shue1998_normal(theta, phi, **kwargs))
+    if kwargs.get("tangent", False):
+        vectors.append(mp_shue1998_tangents(theta, phi, **kwargs))
+    return  vectors[0] if len(vectors)==1 else vectors
 
 
 def mp_lin2010(theta, phi, **kwargs):
@@ -412,7 +511,16 @@ def bs_jelinek2012(theta, phi, **kwargs):
 
     R0 = 2 * R * Pd ** (-1 / epsilon)
     r = R0 / (np.cos(theta) + np.sqrt(np.cos(theta) ** 2 + np.sin(theta) * np.sin(theta) * lamb ** 2))
-    return coords.choice_coordinate_system(r, theta, phi, **kwargs)
+    rtp = coords.choice_coordinate_system(r, theta, phi, **kwargs)
+
+    vectors=[rtp]
+    if kwargs.get("normal", False):
+        vectors.append(bs_jelinek2012_normal(theta, phi, **kwargs))
+    if kwargs.get("tangent", False):
+        vectors.append(bs_jelinek2012_tangents(theta, phi, **kwargs))
+    return  vectors[0] if len(vectors)==1 else vectors
+
+
 
 def mp_nguyen2020(theta, phi, **kwargs):
     def inv_cos(t):
@@ -473,94 +581,6 @@ def mp_nguyen2020(theta, phi, **kwargs):
     return coords.choice_coordinate_system(r, theta, phi, **kwargs)
 
 
-def mp_shue1998_tangents(theta, phi, **kwargs):
-    Pd = kwargs.get("Pd", 2.056)
-    Bz = kwargs.get("Bz", -0.001)
-
-    r0 = (10.22 + 1.29 * np.tanh(0.184 * (Bz + 8.14))) * Pd ** (-1. / 6.6)
-    a = (0.58 - 0.007 * Bz) * (1 + 0.024 * np.log(Pd))
-    r = r0 * (2. / (1 + np.cos(theta))) ** a
-    drdt = r0 * a * (2 ** a) * np.sin(theta) / (1 + np.cos(theta)) ** (a + 1)
-    dxdt = drdt * np.cos(theta) - r * np.sin(theta)
-    dydt = drdt * np.sin(theta) * np.sin(phi) + r * np.cos(theta) * np.sin(phi)
-    dzdt = drdt * np.sin(theta) * np.cos(phi) + r * np.cos(theta) * np.cos(phi)
-
-    normt = mnorm(dxdt, dydt, dzdt)
-    normt[normt == 0] = 1
-
-    dxdp = 0
-    dydp = r * np.sin(theta) * np.cos(phi)
-    dzdp = -r * np.sin(theta) * np.sin(phi)
-
-    normp = mnorm(dxdp, dydp, dzdp)
-    normp[normp == 0] = 1
-
-    return [dxdt / normt, dydt / normt, dzdt / normt], [dxdp / normp, dydp / normp, dzdp / normp]
-
-
-def bs_jelinek2012_tangents(theta, phi, **kwargs):
-    lamb = 1.17
-    R = 15.02
-    epsilon = 6.55
-    Pd = kwargs.get('Pd', 2.056)
-
-    R0 = 2 * R * Pd ** (-1 / epsilon)
-    r = R0 / (np.cos(theta) + np.sqrt(np.cos(theta) ** 2 + (lamb * np.sin(theta)) ** 2))
-    test = R0 * np.sin(theta) * (
-            np.cos(theta) * (1 - lamb ** 2) / np.sqrt(np.cos(theta) ** 2 + (lamb * np.sin(theta)) ** 2)) / (
-                   np.cos(theta) + np.sqrt(np.cos(theta) ** 2 + (lamb * np.sin(theta)) ** 2)) ** 2
-
-    u0 = R0
-    v0 = np.cos(theta) + np.sqrt(np.cos(theta) ** 2 + (lamb * np.sin(theta)) ** 2)
-    v0p = -np.sin(theta) + (np.cos(theta) * (-np.sin(theta)) + lamb ** 2 * np.sin(theta) * np.cos(theta)) / np.sqrt(
-        np.cos(theta) ** 2 + (lamb * np.sin(theta)) ** 2)
-
-    drdt = -u0 * v0p / v0 ** 2
-
-    dxdt = drdt * np.cos(theta) - r * np.sin(theta)
-    dydt = drdt * np.sin(theta) * np.sin(phi) + r * np.cos(theta) * np.sin(phi)
-    dzdt = drdt * np.sin(theta) * np.cos(phi) + r * np.cos(theta) * np.cos(phi)
-
-    normt = mnorm(dxdt, dydt, dzdt)
-    normt[normt == 0] = 1
-
-    dxdp = 0
-    dydp = r * np.sin(theta) * np.cos(phi)
-    dzdp = -r * np.sin(theta) * np.sin(phi)
-
-    normp = mnorm(dxdp, dydp, dzdp)
-    normp[normp == 0] = 1
-
-    return [dxdt / normt, dydt / normt, dzdt / normt], [dxdp / normp, dydp / normp, dzdp / normp]
-
-
-def mp_shue1998_normal(theta, phi, **kwargs):
-    [dxdt, dydt, dzdt], [dxdp, dydp, dzdp] = mp_shue1998_tangents(theta, phi, **kwargs)
-
-    pvx = dzdt * dydp - dydt * dzdp
-    pvy = dxdt * dzdp - dzdt * dxdp
-    pvz = dydt * dxdp - dxdt * dydp
-
-    norm = mnorm(pvx, pvy, pvz)
-
-    pvx[norm == 0] = 1
-    norm[norm == 0] = 1
-
-    return (pvx / norm, pvy / norm, pvz / norm)
-
-
-def bs_jelinek2012_normal(theta, phi, **kwargs):
-    [dxdt, dydt, dzdt], [dxdp, dydp, dzdp] = bs_jelinek2012_tangents(theta, phi, **kwargs)
-    pvx = dzdt * dydp - dydt * dzdp
-    pvy = dxdt * dzdp - dzdt * dxdp
-    pvz = dydt * dxdp - dxdt * dydp
-
-    norm = mnorm(pvx, pvy, pvz)
-
-    pvx[norm == 0] = 1
-    norm[norm == 0] = 1
-
-    return (pvx / norm, pvy / norm, pvz / norm)
 
 
 _models = { "mp_shue1998": mp_shue1998,
@@ -573,28 +593,6 @@ _models = { "mp_shue1998": mp_shue1998,
             "bs_formisano1979": bs_formisano1979,
             "bs_jerab2005": bs_Jerab2005,
             "bs_jelinek2012": bs_jelinek2012}
-_tangents = {"mp_shue1998" : mp_shue1998_tangents,
-             "bs_jelinek2012" : bs_jelinek2012_tangents,
-            "mp_shue1997": None,
-             "mp_formisano1979": None,
-             "mp_liu2015": None,
-             "mp_jelinek2012": None,
-             "mp_lin2010": None,
-             "mp_nguyen2020": None,
-             "bs_formisano1979": None,
-             "bs_jerab2005": None}
-
-_normal = {"mp_shue1998" : mp_shue1998_normal,
-             "bs_jelinek2012" : bs_jelinek2012_normal,
-            "mp_shue1997": None,
-           "mp_formisano1979": None,
-           "mp_liu2015": None,
-           "mp_jelinek2012": None,
-           "mp_lin2010": None,
-           "mp_nguyen2020": None,
-           "bs_formisano1979": None,
-           "bs_jerab2005": None
-           }
 
 def available(model):
     if model == "magnetopause":
@@ -649,10 +647,6 @@ class Magnetosheath:
         self._bow_shock = _models[kwargs["bow_shock"]]
         self.model_magnetopause = kwargs["magnetopause"]
         self.model_bow_shock = kwargs["bow_shock"]
-        self._tangents_magnetopause = _tangents[kwargs["magnetopause"]]
-        self._normal_magnetopause = _normal[kwargs["magnetopause"]]
-        self._tangents_bow_shock = _tangents[kwargs["bow_shock"]]
-        self._normal_bow_shock = _normal[kwargs["bow_shock"]]
 
 
 
@@ -661,32 +655,14 @@ class Magnetosheath:
         if kwargs["parabolic"]:
             return self._parabolize(theta, phi, **kwargs)[0]
         else:
-            if kwargs.get('normal', False) or kwargs.get('tangents', False) :
-                ret_vectors = []
-                ret_vectors.append(self._magnetopause(theta, phi, **kwargs))
-                if kwargs.get('normal', False):
-                    ret_vectors.append(self._normal_magnetopause(listify(theta), listify(phi), **kwargs))
-                if kwargs.get('tangents', False):
-                    ret_vectors.append(self._tangents_magnetopause(listify(theta), listify(phi), **kwargs))
-                return ret_vectors
-            else :
-                return self._magnetopause(theta, phi, **kwargs)
+            return self._magnetopause(theta, phi, **kwargs)
 
     @check_parabconfoc
     def bow_shock(self, theta, phi, **kwargs):
         if kwargs["parabolic"]:
             return self._parabolize(theta, phi, **kwargs)[1]
         else:
-            if kwargs.get('normal', False) or kwargs.get('tangents', False):
-                ret_vectors = []
-                ret_vectors.append(self._bow_shock(theta, phi, **kwargs))
-                if kwargs.get('normal',False):
-                    ret_vectors.append(self._normal_bow_shock(listify(theta), listify(phi), **kwargs))
-                if kwargs.get('tangents',False):
-                    ret_vectors.append(self._tangents_bow_shock(listify(theta), listify(phi), **kwargs))
-                return ret_vectors
-            else :
-                return self._bow_shock(theta, phi, **kwargs)
+            return self._bow_shock(theta, phi, **kwargs)
 
 
     @check_parabconfoc
@@ -696,20 +672,6 @@ class Magnetosheath:
         else:
             return self._magnetopause(theta, phi, **kwargs), \
                    self._bow_shock(theta, phi, **kwargs)
-
-    def tangents_magnetopause(self, theta, phi, **kwargs):
-        return self._tangents_magnetopause(listify(theta), listify(phi), **kwargs)
-
-    def normal_magnetopause(self, theta, phi, **kwargs):
-        return self._normal_magnetopause(listify(theta), listify(phi), **kwargs)
-
-
-    def tangents_bow_shock(self, theta, phi,**kwargs):
-        return self._tangents_bow_shock(listify(theta), listify(phi), **kwargs)
-
-    def normal_bow_shock(self, theta, phi,**kwargs):
-        return self._normal_bow_shock(listify(theta), listify(phi), **kwargs)
-
 
     def _parabolize(self, theta, phi, **kwargs):
         xmp, y, xfmp = _interest_points(self._magnetopause, **kwargs)
