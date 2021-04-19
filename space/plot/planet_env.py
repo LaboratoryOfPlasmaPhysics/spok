@@ -52,13 +52,7 @@ def _set_infos_earth_env(fig, ax, **kwargs):
     return fig, ax
 
 
-def _make_figure(**kwargs):
-    ncols = np.sum([1 for arg in ['x_slice', 'y_slice', 'z_slice'] if arg in kwargs])
-    if ncols == 0:
-        ncols = 1
-    figsize = kwargs.get('figsize', (5 * ncols, 4.5))
-    fig, ax = plt.subplots(nrows=1, ncols=ncols, figsize=figsize, constrained_layout=True)
-    return fig, ax
+
 
 
 def _set_infos_earth_env(fig, ax, **kwargs):
