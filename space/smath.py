@@ -22,11 +22,11 @@ def resolve_poly2_real_roots(a, b, c, epsilon=1e-7):
     delta = b ** 2 - 4 * a * c
     if isinstance(delta, np.ndarray) | isinstance(delta, pd.Series):
         delta[delta < 0] = np.nan
-        a = np.ones(len(delta)) * a
-        b = np.ones(len(delta)) * b
-        c = np.ones(len(delta)) * c
-        r1 = np.zeros(len(delta))
-        r2 = np.zeros(len(delta))
+        a = np.ones_like(delta) * a
+        b = np.ones_like(delta) * b
+        c = np.ones_like(delta) * c
+        r1 = np.zeros_like(delta)
+        r2 = np.zeros_like(delta)
         r1[abs(a) >= epsilon] = (-b[abs(a) >= epsilon] + np.sqrt(delta[abs(a) >= epsilon])) / (2 * a[abs(a) >= epsilon])
         r2[abs(a) >= epsilon] = (-b[abs(a) >= epsilon] - np.sqrt(delta[abs(a) >= epsilon])) / (2 * a[abs(a) >= epsilon])
         r1[abs(a) <= epsilon ] = r2[(abs(a) <= epsilon)] = resolve_poly1(b[abs(a) <= epsilon ], c[abs(a) <= epsilon ] , epsilon=epsilon)
