@@ -45,8 +45,8 @@ def add_cst_radiuus(pos, cst,coord_sys):
 
 
 def swi_base(omni_data):
-    norm_V = np.sqrt(omni_data.Vx ** 2 + (omni_data.Vy + 29.8) ** 2 + omni_data.Vz ** 2)
-    X = np.array([-np.array([vx, vy + 29.8, vz]) / V for vx, vy, vz, V in
+    norm_V = np.sqrt(omni_data.Vx ** 2 + (omni_data.Vy ) ** 2 + omni_data.Vz ** 2)
+    X = np.array([-np.array([vx, vy, vz]) / V for vx, vy, vz, V in
                   zip(omni_data.Vx.values, omni_data.Vy.values, omni_data.Vz.values, norm_V)])
     B = np.array([np.array([bx, by, bz]) for bx, by, bz in zip(np.sign(omni_data.COA.values) * omni_data.Bx.values,
                                                                np.sign(omni_data.COA.values) * omni_data.By.values,
@@ -68,9 +68,9 @@ def to_swi(omni_data, msh_data, pos_msh):
 
 
 
-    o_data['Vx'] = X_swi[:,0]*omni_data['Vx']+X_swi[:,1]*(omni_data['Vy']+29.8)+X_swi[:,2]*omni_data['Vz']
-    o_data['Vy'] = Y_swi[:,0]*omni_data['Vx']+Y_swi[:,1]*(omni_data['Vy']+29.8)+Y_swi[:,2]*omni_data['Vz']
-    o_data['Vz'] = Z_swi[:,0]*omni_data['Vx']+Z_swi[:,1]*(omni_data['Vy']+29.8)+Z_swi[:,2]*omni_data['Vz']
+    o_data['Vx'] = X_swi[:,0]*omni_data['Vx']+X_swi[:,1]*(omni_data['Vy'])+X_swi[:,2]*omni_data['Vz']
+    o_data['Vy'] = Y_swi[:,0]*omni_data['Vx']+Y_swi[:,1]*(omni_data['Vy'])+Y_swi[:,2]*omni_data['Vz']
+    o_data['Vz'] = Z_swi[:,0]*omni_data['Vx']+Z_swi[:,1]*(omni_data['Vy'])+Z_swi[:,2]*omni_data['Vz']
 
     o_data['Bx'] = np.sign(omni_data['COA'])*(X_swi[:,0]*omni_data['Bx']+X_swi[:,1]*omni_data['By']+X_swi[:,2]*omni_data['Bz'])
     o_data['By'] = np.sign(omni_data['COA'])*(Y_swi[:,0]*omni_data['Bx']+Y_swi[:,1]*omni_data['By']+Y_swi[:,2]*omni_data['Bz'])
