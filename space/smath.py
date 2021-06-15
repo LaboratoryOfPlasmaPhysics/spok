@@ -4,11 +4,17 @@ import pandas as pd
 def norm(u, v, w):
     return np.sqrt(u**2 + v**2 + w**2)
 
+def radians(degrees):
+    return degrees*np.pi/180
+
+def degrees(radians):
+    return radians*180/np.pi
+
 def resolve_poly1(a, b, epsilon=1e-7):
 
     if isinstance(a, np.ndarray) | isinstance(a, pd.Series):
-        b = np.ones(len(a)) * b
-        r = np.zeros(len(a))
+        b = np.ones_like(a) * b
+        r = np.zeros_like(a)
         r[(abs(a) >= epsilon)] = -b[ (abs(a) >= epsilon)] / a[ (abs(a) >= epsilon)]
 
     else :
