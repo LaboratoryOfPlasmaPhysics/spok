@@ -14,37 +14,33 @@ from ..utils import listify
 
 
 
-def tilt_earth_normal_year():
-    tilts = np.zeros(365)+np.nan
-    tilts[:79] = np.linspace(-34,0,89)[10:]
-    tilts[79:172] = np.linspace(0,34,93)
-    tilts[172:265] = np.linspace(34,0,93)
-    tilts[265:355] = np.linspace(0,-34,90)
-    tilts[355:] = np.linspace(-34,0,89)[:10]
-    return tilts*np.pi/180
-
-
-def tilt_earth_bissextile_year():
-    tilts = np.zeros(366)+np.nan
-    tilts[:80] = np.linspace(-34,0,90)[10:]
-    tilts[80:173] = np.linspace(0,34,93)
-    tilts[173:266] = np.linspace(34,0,93)
-    tilts[266:356] = np.linspace(0,-34,90)
-    tilts[356:] = np.linspace(-34,0,90)[:10]
-    return tilts*np.pi/180
-
-
 def get_tilt(date):
-    years = pd.DatetimeIndex(date).year
-    days = pd.to_numeric(pd.DatetimeIndex(date).strftime('%j'))-1
-    n_days_year = ((pd.to_datetime((years+1).astype(str))-pd.to_datetime(years.astype(str)))/timedelta(days=1)).astype(int).values
-    year_tilts = tilt_earth_normal_year()
-    year_bis_tilts =tilt_earth_bissextile_year()
-    tilts = np.zeros(len(date))
-    tilts[n_days_year==366]= year_bis_tilts[days[n_days_year==366]]
-    tilts[n_days_year==365]= year_tilts[days[n_days_year==365]]
-    return tilts
+    doy = pd.to_numeric(pd.DatetimeIndex(date).strftime('%j'))
+    ut = pd.to_numeric(pd.DatetimeIndex(date).strftime('%H')) + pd.to_numeric(pd.DatetimeIndex(date).strftime('%M'))/60
+    tilt_year = 23.4 * np.cos((doy-172)*2*np.pi/365.25)
+    tilt_day = 11.2 * np.cos((ut-16.72)*2*np.pi/24)
+    tilt = (tilt_year + tilt_day)*np.pi/180
+    return tilt
 
+
+def associate_SW_Safrankova(X_sat, omni, BS_standoff, dtm=0,sampling_time='5S',vx_median =-406.2):
+    if dtm != 0:
+        #vxmean = abs(omni.Vx.rolling(dt,min_periods=1).mean())
+        vxmean = abs(omni.Vx.rolling(int((2*dtm+1)*timedelta(minutes=1)/(omni.index[-1]-omni.index[-2])),center=True,min_periods=1).mean())
+    else:
+        vxmean = abs(omni.Vx)
+    BS_x0 = BS_standoff[BS_standoff.index.isin(X_sat.index)]
+    BS_x0 = BS_x0.fillna(13.45)
+    lag = np.array(np.round((BS_x0.values-X_sat.values)*6371/vx_median),dtype='timedelta64[s]')
+    time = (X_sat.index-lag).round(sampling_time)
+    vx = pd.Series(name='Vx',dtype=float)
+    vx  = vx.append(vxmean.loc[time],ignore_index=True).fillna(abs(vx_median)).values
+    lag = np.array(np.round((BS_x0.values-X_sat.values)*6371/vx),dtype='timedelta64[s]')
+    time = (X_sat.index-lag).round(sampling_time)
+    OMNI = pd.DataFrame(columns=omni.columns)
+    OMNI = OMNI.append(omni.loc[time], ignore_index=True)
+    OMNI.index = X_sat.index
+    return OMNI.dropna()
 
 
 def _formisano1979(theta, phi, **kwargs):
