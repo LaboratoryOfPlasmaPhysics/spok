@@ -21,6 +21,14 @@ def cartesian_to_spherical(x, y, z):
     return r, theta, phi
 
 
+def cartesian_to_parabolic(x, y, z, xf):
+    r = np.sqrt((x - xf) ** 2 + y ** 2 + z ** 2)
+    s = np.sqrt((x - xf) + r)
+    t = np.sqrt(-(x - xf) + r)
+    p = np.arctan2(z, y)
+    return s, t, p
+
+
 def choice_coordinate_system(R, theta, phi, **kwargs):
     coord_sys = kwargs.get('coord_sys','cartesian')
     if coord_sys == 'cartesian':

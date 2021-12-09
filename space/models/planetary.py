@@ -43,6 +43,38 @@ def associate_SW_Safrankova(X_sat, omni, BS_standoff, dtm=0,sampling_time='5S',v
     return OMNI.dropna()
 
 
+def parabolic_magnetic_field_to_cartesian(Bs, Bt, Bp, s, t, p, hs, ht, hp):
+    Bx = Bs * (s / hs) - Bt * (t / ht)
+    By = Bs * (t / hs) * np.cos(p) + Bt * (s / ht) * np.cos(p) - Bp * np.sin(p)
+    Bz = Bs * (t / hs) * np.sin(p) + Bt * (s / ht) * np.sin(p) + Bp * np.cos(p)
+    return Bx, By, Bz
+
+
+def KF1994(x, y, z, x0, x1, B0x, B0y, B0z):
+    '''
+    	x0 : standoff distance MP
+    	x1 : standoff distance BS
+    '''
+    xf = x0/2
+    s, t, p = coords.cartesian_to_parabolic(x, y, z, xf)
+    s0 = np.sqrt(2 * (x0 - xf))
+    s1 = np.sqrt(2 * (x1 - xf))
+    c = s1 ** 2 / (s1 ** 2 - s0 ** 2)
+    k1 = B0x * c
+    k2 = (B0y * np.cos(p) + B0z * np.sin(p)) * c
+    hs = ht = np.sqrt(s ** 2 + t ** 2)
+    hp = s * t
+
+    Bs = (1 / hs) * (k1 * (s - s0 ** 2 / s) + k2 * t * (1 - s0 ** 2 / s ** 2))
+    Bt = (1 / ht) * (-k1 * t + k2 * (s + s0 ** 2 / s))
+    Bp = (1 / hp) * ((-B0y * np.sin(p) + B0z * np.cos(p)) * c * (s + s0 ** 2 / s) * t)
+
+    Bx, By, Bz = parabolic_magnetic_field_to_cartesian(Bs, Bt, Bp, s, t, p, hs, ht, hp)
+    return Bx, By, Bz
+
+
+
+
 def _formisano1979(theta, phi, **kwargs):
     a11, a22, a33, a12, a13, a23, a14, a24, a34, a44 = kwargs["coefs"]
 
