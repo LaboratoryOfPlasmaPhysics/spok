@@ -41,3 +41,13 @@ def select_data_with_condition(data,cond):
         return [d[cond] for d in data]
     else :
         return data[cond]
+
+
+def make_center_bins(vec, dd = 1):
+    vec = listify(vec)
+    if dd== 1 :
+        return [0.5*(v[1:]+v[:-1]) for v in vec]
+    elif dd==2 :
+        return [0.5*(v[1:,1:]+v[:-1,:-1]) for v in vec]
+    elif dd==3 :
+        return [0.5*(v[1:,1:,1:]+v[:-1,:-1,:-1]) for v in vec]
