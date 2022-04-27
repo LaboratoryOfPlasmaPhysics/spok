@@ -20,7 +20,6 @@ def cartesian_to_spherical(x, y, z):
     r = np.sqrt(x ** 2 + y ** 2 + z ** 2)
     theta = np.arccos(x / r)
     phi = np.arctan2(y, z)
-    phi[z==0]=np.sign(y)*np.pi/2
     return r, theta, phi
 
 
