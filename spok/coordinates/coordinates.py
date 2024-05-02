@@ -107,3 +107,7 @@ def swi_base(vx, vy, vz, bx, by, bz):
     X, Z = X.T, Z.T
     Y = np.cross(Z, X)
     return X, Y, Z
+
+def rotates_from_phi_angle(x,y,z,angle):
+    r,th,ph = cartesian_to_spherical(x,y,z)
+    return spherical_to_cartesian(r,th,ph+angle)
