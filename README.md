@@ -1,17 +1,17 @@
-# space
+# SPOK
 
-[![PyPI](https://img.shields.io/pypi/v/space)](https://pypi.python.org/pypi/space)
-[![Tests](https://github.com/LaboratoryOfPlasmaPhysics/space/actions/workflows/test_main.yml/badge.svg)](https://github.com/LaboratoryOfPlasmaPhysics/space/actions/workflows/test_main.yml)
-[![Documentation Status](https://readthedocs.org/projects/space/badge/?version=latest)](https://space.readthedocs.io/en/latest/?badge=latest)
-[![Coverage Status](https://codecov.io/gh/LaboratoryOfPlasmaPhysics/space/branch/main/graph/badge.svg?branch=main)](https://codecov.io/gh/LaboratoryOfPlasmaPhysics/space/branch/main)
+[![PyPI](https://img.shields.io/pypi/v/spok)](https://pypi.python.org/pypi/spok)
+[![Tests](https://github.com/LaboratoryOfPlasmaPhysics/spok/actions/workflows/test_main.yml/badge.svg)](https://github.com/LaboratoryOfPlasmaPhysics/spok/actions/workflows/test_main.yml)
+[![Documentation Status](https://readthedocs.org/projects/spok/badge/?version=latest)](https://spok.readthedocs.io/en/latest/?badge=latest)
+[![Coverage Status](https://codecov.io/gh/LaboratoryOfPlasmaPhysics/spok/branch/main/graph/badge.svg?branch=main)](https://codecov.io/gh/LaboratoryOfPlasmaPhysics/spok/branch/main)
 
-Space Plasma Analysis CodE
+spok Plasma Observations Kit
 
-![space](https://user-images.githubusercontent.com/3200931/98716891-978e2180-238c-11eb-9487-07c66221e5bb.png)
+![spok](https://user-images.githubusercontent.com/3200931/98716891-978e2180-238c-11eb-9487-07c66221e5bb.png)
 
 
 * Free software: GNU General Public License v3
-* Documentation: https://space.readthedocs.io.
+* Documentation: https://spok.readthedocs.io.
 
 
 ## Features
@@ -19,7 +19,3 @@ Space Plasma Analysis CodE
 
 ## TODO
 
-## Credits
-
-
-This package was created with [Cookiecutter](https://github.com/audreyr/cookiecutter) and the [audreyr/cookiecutter-pypackage](https://github.com/audreyr/cookiecutter-pypackage) project template.

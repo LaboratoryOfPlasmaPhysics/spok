@@ -1,1 +1,1 @@
-"""Unit test package for space."""
+"""Unit test package for spok."""
