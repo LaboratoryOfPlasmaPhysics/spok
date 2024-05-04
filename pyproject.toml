@@ -4,7 +4,7 @@ requires = ["flit_core"]
 
 [project]
 name = "spok"
-version = "0.1.0"
+version = "0.1.1"
 description = "Space Plasmas Observations Kit"
 keywords = ["spok", "plasma-physics"]
 authors = [
